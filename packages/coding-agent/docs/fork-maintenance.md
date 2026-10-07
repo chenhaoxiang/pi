@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 ssot: true
 owner: chx
 ---
@@ -38,6 +38,8 @@ This repairs recovery, not the upstream transport. It does not change provider r
 5. Build/pack and validate the Node consumer outside the repository. Check both bundled CLI and SDK versions. For the local macOS binary, freshly rebuild compiled assets at the exact clean committed release HEAD, then use `build-binaries.sh --skip-install --skip-build --platform darwin-arm64` and verify startup separately. Record that same-HEAD build command/exit status with the artifact hashes; version metadata alone is not binary-to-source proof.
 6. Review the exact commit and run applicable CI before merge/release. Record platform/request smoke tests separately from provider-free tests; do not infer real long-context reliability from synthetic fixtures.
 
+Fork CI hydrates provider data from the immutable `v1.0.4-fork.1` pi-ai release asset, verifies its pinned SHA-256, and runs `build:offline` plus every existing check and test. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
+
 ## Distribution
 
 Do not run `release:patch`, `release:minor` or `npm publish` against the community namespace. Do not write community pi.dev/R2 release markers. Community publication jobs are repository-identity guarded; this fork uses GitHub Release artifacts.
@@ -55,5 +57,7 @@ Install into a permanent versioned user-owned directory and change only the defa
 Before switching, verify installed extension compatibility. In particular, older pi-subagents host-alias checks reject fork-version strings and need the maintained strict-fork host recognition fix; arbitrary beta/unknown versions must remain fail-closed.
 
 Rollback restores the saved launcher target and, if changed, the previous pi-subagents package declaration. A disk update is not proof that an active process has reloaded. Restart a Pi session only when its work is settled.
+
+The [1.0.4-fork.1 installed snapshot](fork-installation-2026-10-08.md) records the performing owner's release/runtime attestation separately from this maintained contract.
 
 SAW may associate the core installation with its package repository and fixed release manifest/tag. Such a reference is not a full installed-file integrity proof or a claim that every active process is running the new version.
