@@ -12,6 +12,14 @@
 
 # Pi
 
+## Maintained fork
+
+This is the maintained `chenhaoxiang/pi` fork of [earendil-works/pi](https://github.com/earendil-works/pi). The first release, **1.0.4-fork.1**, uses the exact community v1.0.4 baseline and fixes premature Responses stream disconnections not entering bounded automatic retry. It does not eliminate upstream disconnects or change model/context limits.
+
+`main` carries reviewed fork changes; `upstream-main` is the untouched community mirror. Use the pinned assets from [this fork's GitHub Releases](https://github.com/chenhaoxiang/pi/releases), not the community installer/npm commands below, when installing this fork. Community self-update and its banner are disabled for canonical maintained fork versions; extension updates remain separate. See the [maintenance and rollback runbook](packages/coding-agent/docs/fork-maintenance.md).
+
+The remaining sections describe the community project and its installation channels.
+
 Pi is a minimal, extensible agent harness that you can make your own.
 
 Adapt Pi to your workflows, not the other way around. Customize Pi with [extensions](packages/coding-agent/docs/extensions.md), [skills](packages/coding-agent/docs/skills.md), [prompt templates](packages/coding-agent/docs/prompt-templates.md), and [themes](packages/coding-agent/docs/themes.md). Bundle them as [Pi packages](packages/coding-agent/docs/packages.md) and share via npm or git.

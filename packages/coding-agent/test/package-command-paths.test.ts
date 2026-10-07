@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import lockfile from "proper-lockfile";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as Config from "../src/config.ts";
 import { ENV_AGENT_DIR, PACKAGE_NAME, VERSION } from "../src/config.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { DefaultPackageManager, type ResolvedPaths } from "../src/core/package-manager.ts";
@@ -23,6 +24,14 @@ import { ConfigSelectorComponent } from "../src/modes/interactive/components/con
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { handlePackageCommand } from "../src/package-manager-cli.ts";
 import { allowNetwork } from "./test-network-env.ts";
+
+// These existing installer tests characterize the community update channel.
+// Keep their assertions intact with a community-version fixture; the maintained
+// fork refusal is independently covered by fork-update-channel and CLI smoke.
+vi.mock("../src/config.ts", async (importOriginal) => {
+	const config = await importOriginal<typeof Config>();
+	return { ...config, VERSION: config.VERSION.replace(/-fork\.[1-9]\d*$/, "") };
+});
 
 describe("package commands", () => {
 	let tempDir: string;

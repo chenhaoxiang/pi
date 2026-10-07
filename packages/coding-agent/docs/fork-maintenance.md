@@ -48,7 +48,7 @@ Every release includes the 13 public workspace tarballs, Node consumer archive, 
 
 ## Installation and rollback
 
-Do not use the community `pi update`/`pi update --self` or pi.dev installer for a fork. Use pinned releases from this fork; `PI_SKIP_VERSION_CHECK=1` can suppress the inherited community notice in source/preparation builds. The released fork includes a separate community self-update guard, delivered with the final recovery/validation follow-up before publication.
+Do not use the community `pi update`/`pi update --self` or pi.dev installer for a fork. Use pinned releases from this fork; `PI_SKIP_VERSION_CHECK=1` can suppress the inherited community notice in source/preparation builds. The final recovery/validation follow-up disables the community release query/banner for canonical maintained fork versions, and refuses self-update before any installer/package-manager command, including --force. Explicit extension updates stay separate; this is not an automatic fork updater.
 
 Install into a permanent versioned user-owned directory and change only the default launcher after verification. Preserve the prior launcher target and installation; do not replace files beneath running Pi processes. Do not change provider credentials or unrelated extension configuration.
 
