@@ -34,7 +34,7 @@ Use the reference pages to look up [CLI options](cli.md), [settings](settings.md
 
 For platform-specific help, see [Terminal Setup](terminal-setup.md), [Windows](windows.md), [tmux](tmux.md), [Termux on Android](termux.md), or [Containerization](containerization.md).
 
-For the maintained `chenhaoxiang/pi` distribution, see [Fork maintenance and rollback](fork-maintenance.md). Its release channel and community mirror are distinct from the community installer.
+For the maintained `chenhaoxiang/pi` distribution, see [Fork maintenance and rollback](fork-maintenance.md). Its release channel and community mirror are distinct from the community installer. The [1.0.4-fork.1 installation snapshot](fork-installation-2026-10-08.md) records release and local acceptance boundaries.
 
 ## Work safely
 

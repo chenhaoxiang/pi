@@ -11,6 +11,8 @@
 
 ## Documentation map
 
+- [1.0.4-fork.1 installed acceptance](packages/coding-agent/docs/fork-installation-2026-10-08.md): immutable source/assets, verified local launcher and preserved-runtime boundaries.
+
 - [Fork maintenance](packages/coding-agent/docs/fork-maintenance.md): baseline, disconnect recovery, distribution, validation, installation and rollback boundaries.
 
 ## Conversational Style
