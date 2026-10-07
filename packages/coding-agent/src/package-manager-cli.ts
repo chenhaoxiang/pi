@@ -37,7 +37,12 @@ import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/tru
 import { spawnProcess, spawnProcessSync, waitForChildProcess } from "./utils/child-process.ts";
 import { canonicalizePath, getCwdRelativePath } from "./utils/paths.ts";
 import { getPiUserAgent } from "./utils/pi-user-agent.ts";
-import { formatVersionCheckError, getLatestPiRelease, isNewerPackageVersion } from "./utils/version-check.ts";
+import {
+	formatVersionCheckError,
+	getLatestPiRelease,
+	isMaintainedForkVersion,
+	isNewerPackageVersion,
+} from "./utils/version-check.ts";
 import {
 	cleanupWindowsSelfUpdateQuarantine,
 	quarantineWindowsNativeDependencies,
@@ -660,6 +665,11 @@ interface SelfUpdatePlan {
 }
 
 async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
+	if (isMaintainedForkVersion(VERSION)) {
+		throw new Error(
+			"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
+		);
+	}
 	let latestRelease: Awaited<ReturnType<typeof getLatestPiRelease>>;
 	try {
 		latestRelease = await getLatestPiRelease(VERSION, { retry: true });
@@ -1009,6 +1019,11 @@ export async function handlePackageCommand(
 
 			case "update": {
 				const target = options.updateTarget ?? { type: "self" };
+				if (updateTargetIncludesSelf(target) && isMaintainedForkVersion(VERSION)) {
+					throw new Error(
+						"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
+					);
+				}
 				if (options.showExtensionsSkippedNote) {
 					console.log(
 						chalk.dim(`Extensions are skipped. Run ${APP_NAME} update --extensions to update extensions.`),

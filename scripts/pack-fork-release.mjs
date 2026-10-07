@@ -6,6 +6,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { fileURLToPath } from "node:url";
 import { installCodingAgentConsumer, packReleasePackages, smokeTestCodingAgentConsumer } from "./coding-agent-consumer.mjs";
 import { getPublicWorkspacePackages } from "./release-packages.mjs";
+import { isMaintainedForkVersion } from "../packages/coding-agent/src/utils/fork-version.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(root);
@@ -28,7 +29,7 @@ if (!offset || (!offset.startsWith("..") && !isAbsolute(offset)) || existsSync(o
 const pkg = JSON.parse(readFileSync(join(root, "packages/coding-agent/package.json"), "utf8"));
 const version = pkg.version;
 const repository = pkg.piConfig?.forkRepository;
-if (repository !== "chenhaoxiang/pi" || !/^\d+\.\d+\.\d+-fork\.[1-9]\d*$/.test(version)) {
+if (repository !== "chenhaoxiang/pi" || !isMaintainedForkVersion(version)) {
 	throw new Error("Expected maintained Pi fork metadata");
 }
 const sourceCommit = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();

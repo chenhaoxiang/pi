@@ -12,6 +12,10 @@
 
 # Pi
 
+## Maintained fork distribution
+
+This package is **1.0.4-fork.1** from [chenhaoxiang/pi](https://github.com/chenhaoxiang/pi), based on community v1.0.4 with bounded Responses disconnect recovery. Install verified assets from this fork's GitHub Releases. The community `pi update --self`, update banner and pi.dev/npm installer are not this fork's update channel; canonical maintained fork versions refuse community self-update. See [fork maintenance and rollback](docs/fork-maintenance.md). The commands below describe the community distribution.
+
 Pi is a minimal, extensible agent harness that you can make your own.
 
 Adapt Pi to your workflows, not the other way around. Customize Pi with [extensions](docs/extensions.md), [skills](docs/skills.md), [prompt templates](docs/prompt-templates.md), and [themes](docs/themes.md). Bundle them as [Pi packages](docs/packages.md) and share via npm or git.
