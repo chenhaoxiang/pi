@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { installCodingAgentConsumer, packReleasePackages, smokeTestCodingAgentConsumer } from "./coding-agent-consumer.mjs";
 import { getPublicWorkspacePackages } from "./release-packages.mjs";
@@ -12,9 +12,14 @@ process.chdir(root);
 const args = process.argv.slice(2);
 const candidate = args.includes("--candidate");
 const index = args.indexOf("--out");
-if (index < 0 || !args[index + 1] || args.some((arg, i) => i !== index + 1 && !["--out", "--candidate"].includes(arg))) {
-	throw new Error("Usage: node scripts/pack-fork-release.mjs --out <new external directory> [--candidate]");
+const binaryIndex = args.indexOf("--binary");
+if (
+	index < 0 || !args[index + 1] || (binaryIndex >= 0 && !args[binaryIndex + 1]) ||
+	args.some((arg, i) => i !== index + 1 && !(binaryIndex >= 0 && i === binaryIndex + 1) && !["--out", "--binary", "--candidate"].includes(arg))
+) {
+	throw new Error("Usage: node scripts/pack-fork-release.mjs --out <new external directory> [--binary <tested archive>] [--candidate]");
 }
+if (!candidate && binaryIndex < 0) throw new Error("A release requires a separately tested native binary archive");
 const output = resolve(args[index + 1]);
 const offset = relative(root, output);
 if (!offset || (!offset.startsWith("..") && !isAbsolute(offset)) || existsSync(output)) {
@@ -39,7 +44,24 @@ installCodingAgentConsumer(consumer, tarballs);
 smokeTestCodingAgentConsumer(consumer);
 symlinkSync("node_modules/.bin/pi", join(consumer, "pi"));
 const digest = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
-const assets = [...tarballs.values()];
+const assets = [...tarballs.values()].map((file) => {
+	const target = join(output, basename(file));
+	cpSync(file, target);
+	return target;
+});
+if (binaryIndex >= 0) {
+	const binary = resolve(args[binaryIndex + 1]);
+	if (!/^pi-(?:darwin|linux)-(?:arm64|x64)\.tar\.gz$/.test(basename(binary)) || !lstatSync(binary).isFile()) {
+		throw new Error("Expected an ordinary tested Unix native release archive");
+	}
+	const binaryPackage = JSON.parse(execFileSync("tar", ["-xOf", binary, "pi/package.json"], { encoding: "utf8" }));
+	if (binaryPackage.version !== version || binaryPackage.piConfig?.forkRepository !== repository) {
+		throw new Error("Native binary archive metadata does not match this fork release");
+	}
+	const target = join(output, basename(binary));
+	cpSync(binary, target);
+	assets.push(target);
+}
 if (!candidate) {
 	const manifest = {
 		schemaVersion: 1,
@@ -55,10 +77,15 @@ if (!candidate) {
 	writeFileSync(file, content);
 	writeFileSync(join(consumer, "node_modules", pkg.name, "release-manifest.json"), content);
 	assets.push(file);
+	for (const [source, name] of [["package.json", "pi-coding-agent-install-package.json"], ["package-lock.json", "pi-coding-agent-install-package-lock.json"]]) {
+		const target = join(output, name);
+		cpSync(join(root, "packages/coding-agent/install-lock", source), target);
+		assets.push(target);
+	}
 }
 const archive = join(output, `pi-node-${version}.tar.gz`);
 execFileSync("tar", ["-czf", archive, "-C", output, "node", "tarballs"]);
 assets.push(archive);
-writeFileSync(join(output, "SHA256SUMS"), assets.map((file) => `${digest(file)}  ${relative(output, file)}`).join("\n") + "\n");
+writeFileSync(join(output, "SHA256SUMS"), assets.map((file) => `${digest(file)}  ${basename(file)}`).join("\n") + "\n");
 console.log(candidate ? "Candidate validated; no release/source provenance emitted." : `Release source: ${sourceCommit}`);
 console.log(`Node consumer and ${tarballs.size} lockstep workspace tarballs: ${output}`);
