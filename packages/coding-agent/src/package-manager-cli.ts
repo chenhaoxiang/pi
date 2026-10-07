@@ -1019,6 +1019,11 @@ export async function handlePackageCommand(
 
 			case "update": {
 				const target = options.updateTarget ?? { type: "self" };
+				if (updateTargetIncludesSelf(target) && isMaintainedForkVersion(VERSION)) {
+					throw new Error(
+						"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
+					);
+				}
 				if (options.showExtensionsSkippedNote) {
 					console.log(
 						chalk.dim(`Extensions are skipped. Run ${APP_NAME} update --extensions to update extensions.`),

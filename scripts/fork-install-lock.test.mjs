@@ -27,6 +27,8 @@ function fixture(version, repository) {
 		mkdirSync(join(directory, path), { recursive: true });
 		writeFileSync(join(directory, path, "package.json"), JSON.stringify(pkg));
 	}
+	mkdirSync(join(directory, "packages/coding-agent/src/utils"), { recursive: true });
+	cpSync(join(root, "packages/coding-agent/src/utils/fork-version.ts"), join(directory, "packages/coding-agent/src/utils/fork-version.ts"));
 	mkdirSync(join(directory, "scripts"), { recursive: true });
 	cpSync(join(root, "scripts/generate-coding-agent-install-lock.mjs"), join(directory, "scripts/generate-coding-agent-install-lock.mjs"));
 	writeFileSync(join(directory, "package-lock.json"), JSON.stringify(lock));
@@ -56,7 +58,7 @@ for (const [version, repository, host] of [
 	});
 }
 
-for (const [version, repository] of [["1.0.4-fork.0", "chenhaoxiang/pi"], ["1.0.4-fork.1", "../escape"], ["1.0.4-fork.1", "https://invalid.example/pi"]]) {
+for (const [version, repository] of [["01.0.4-fork.1", "chenhaoxiang/pi"], ["1.0.4-fork.1000000", "chenhaoxiang/pi"], ["1.0.4-fork.0", "chenhaoxiang/pi"], ["1.0.4-fork.1", "../escape"], ["1.0.4-fork.1", "https://invalid.example/pi"]]) {
 	test(`rejects invalid fork source ${version} ${repository}`, () => {
 		const directory = fixture(version, repository);
 		try {

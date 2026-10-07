@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMaintainedForkVersion } from "../packages/coding-agent/src/utils/fork-version.ts";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -135,7 +136,7 @@ function registryTarballUrl(packageName, version) {
 		if (
 			typeof forkRepository !== "string" ||
 			!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(forkRepository) ||
-			!/^\d+\.\d+\.\d+-fork\.[1-9]\d*$/.test(version)
+			!isMaintainedForkVersion(version)
 		) {
 			throw new Error("Invalid fork repository or release version");
 		}

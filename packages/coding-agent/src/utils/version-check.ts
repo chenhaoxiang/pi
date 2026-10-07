@@ -1,14 +1,12 @@
 import { compare, valid } from "semver";
+import { isMaintainedForkVersion } from "./fork-version.ts";
 import { fetchWithRetry } from "./management-http.ts";
 import { getPiUserAgent } from "./pi-user-agent.ts";
 
 const LATEST_VERSION_URL = "https://pi.dev/api/latest-version";
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 
-/** Maintained forks have their own immutable release channel, not pi.dev/npm self-update. */
-export function isMaintainedForkVersion(version: string): boolean {
-	return /^(?:0|[1-9]\d{0,5})\.(?:0|[1-9]\d{0,5})\.(?:0|[1-9]\d{0,5})-fork\.[1-9]\d{0,5}$/.test(version.trim());
-}
+export { isMaintainedForkVersion };
 
 export interface LatestPiRelease {
 	version: string;
