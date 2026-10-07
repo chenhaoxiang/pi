@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 ssot: true
 owner: chx
 ---
@@ -37,6 +37,8 @@ This repairs recovery, not the upstream transport. It does not change provider r
 4. Run new disconnect/classifier, session/tool-recovery and installer-lock regressions, retaining existing tests unchanged.
 5. Build/pack and validate the Node consumer outside the repository. Check both bundled CLI and SDK versions. For the local macOS binary, freshly rebuild compiled assets at the exact clean committed release HEAD, then use `build-binaries.sh --skip-install --skip-build --platform darwin-arm64` and verify startup separately. Record that same-HEAD build command/exit status with the artifact hashes; version metadata alone is not binary-to-source proof.
 6. Review the exact commit and run applicable CI before merge/release. Record platform/request smoke tests separately from provider-free tests; do not infer real long-context reliability from synthetic fixtures.
+
+Fork CI hydrates provider data from the immutable `v1.0.4-fork.1` pi-ai release asset, verifies its pinned SHA-256, and runs `build:offline` plus every existing check and test. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
 
 ## Distribution
 
