@@ -11,7 +11,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const sandboxRequire = createRequire(require.resolve("@anthropic-ai/sandbox-runtime"));
 const shellQuote = sandboxRequire("shell-quote");
-const postcssRequire = createRequire(require.resolve("postcss"));
+const agentRequire = createRequire(join(root, "packages/coding-agent/package.json"));
+const vitestRequire = createRequire(agentRequire.resolve("vitest/package.json"));
+const viteRequire = createRequire(vitestRequire.resolve("vite/package.json"));
+const postcssRequire = createRequire(viteRequire.resolve("postcss/package.json"));
 const sourceMapPath = postcssRequire.resolve("source-map-js");
 const { SourceMapConsumer, SourceMapGenerator, SourceNode } = postcssRequire("source-map-js");
 const shxManifestPath = require.resolve("shx/package.json");
@@ -89,7 +92,7 @@ try {
 	const consumer = new SourceMapConsumer(JSON.parse(process.argv[2]));
 	process.stdout.write(SourceNode.fromStringWithSourceMap("generated\\n", consumer).toString());
 } catch (error) {
-	if (!/^Section offset line must not exceed 10000000\\.$/.test(error.message)) throw error;
+	if (!(error instanceof Error) || !/^Section offset line must not exceed /.test(error.message)) throw error;
 	process.stdout.write("rejected\\n");
 }`;
 		const result = spawnSync(process.execPath, ["--max-old-space-size=64", "-e", code, sourceMapPath, JSON.stringify(indexedMap)], {

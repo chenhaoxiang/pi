@@ -32,6 +32,8 @@ Keep sandbox-runtime `0.0.26`, Gondolin `0.12.0`, public workspace versions and 
 
 Root overrides are ignored when an example is copied and installed as a separate project. The sandbox manifest therefore carries its own shell-quote override. A fresh standalone install must confirm the resolved version and run its own audit. This does not update previously copied/installed sandbox extensions.
 
+For a sandbox copied from the immutable `v1.0.4-fork.1` artifact, merge `"overrides": { "shell-quote": "1.12.0" }` into that copy's manifest, refresh its lock with `npm install --package-lock-only --ignore-scripts`, then reinstall with `npm ci --ignore-scripts` and verify resolution/audit before using it. A fresh unpinned copy may already resolve a fixed version through `^1.8.3`; do not infer that every old artifact copy is vulnerable, or that a new source pin has repaired an old locked installation.
+
 ## Verified results and limits
 
 - Raw full-workspace and `--omit=dev` workspace audits both report **2 high / 0 critical** after remediation. They still exit 1; do not describe them as zero-vulnerability audits.
@@ -40,7 +42,7 @@ Root overrides are ignored when an example is copied and installed as a separate
 - Eleven new dependency regressions cover all four line terminators after a comment, ordinary shell arguments, unchanged sandbox configuration APIs, bounded source-map offsets and ordinary mappings, build-tool commands and actual dependency resolution. The vulnerable quote output is never executed; the source-map denial-of-service regression runs in a heap/time-bounded child.
 - `npm run check`, full `build:offline`, daemon build and installer-lock check pass. Use the existing verified release model-data snapshot, not mutable live prices.
 - On macOS/Node 22, the full provider-free suite still reports two unchanged native watcher failures in `env-node-conformance.test.ts`; its focused 51-case recheck passes. An earlier overlong Unix socket fixture root also failed coordinator/listener cases; shorter independent fixtures and the subsequent full run pass those cases. Existing source and assertions are unchanged. Do not claim an all-green local native-watcher suite.
-- Exact-head independent review and Linux CI are recorded with the PR evidence, separately from these owner-run local observations. No reviewer private-runtime replay is implied.
+- Bind independent review and Linux CI to the exact candidate head and retain their results with the PR evidence once available. These are separate from owner-run local observations; do not claim external verification before it finishes. No reviewer private-runtime replay is implied.
 
 ## Remaining upstream debt
 
