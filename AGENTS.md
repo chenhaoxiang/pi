@@ -11,6 +11,8 @@
 
 ## Documentation map
 
+- [Dependency security maintenance](packages/coding-agent/docs/fork-dependency-security-2026-10-08.md): exact corrected resolutions, standalone sandbox coverage and two retained upstream high findings.
+
 - [1.0.4-fork.1 installed acceptance](packages/coding-agent/docs/fork-installation-2026-10-08.md): immutable source/assets, verified local launcher and preserved-runtime boundaries.
 
 - [Fork maintenance](packages/coding-agent/docs/fork-maintenance.md): baseline, disconnect recovery, distribution, validation, installation and rollback boundaries.

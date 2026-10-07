@@ -36,6 +36,8 @@ For platform-specific help, see [Terminal Setup](terminal-setup.md), [Windows](w
 
 For the maintained `chenhaoxiang/pi` distribution, see [Fork maintenance and rollback](fork-maintenance.md). Its release channel and community mirror are distinct from the community installer. The [1.0.4-fork.1 installation snapshot](fork-installation-2026-10-08.md) records release and local acceptance boundaries.
 
+For development dependency remediation and remaining upstream advisories, see [Dependency security maintenance](fork-dependency-security-2026-10-08.md). This is distinct from the immutable installed release.
+
 ## Work safely
 
 Pi's tools and extensions run with the permissions of the Pi process. Project trust controls which project resources Pi loads, but it does not sandbox tool calls. Review [Security](security.md) before using untrusted files, repositories, extensions, or unattended automation.

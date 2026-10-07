@@ -40,6 +40,10 @@ This repairs recovery, not the upstream transport. It does not change provider r
 
 Fork CI hydrates provider data from the immutable `v1.0.4-fork.1` pi-ai release asset, verifies its pinned SHA-256, and runs `build:offline` plus every existing check and test. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
 
+## Dependency security maintenance
+
+Review the [dependency security record](fork-dependency-security-2026-10-08.md) when refreshing the development lock or copying the sandbox example. Raw audits and accepted-advisory policy results are different; the two upstream node-forge/Gondolin high findings remain open. Source maintenance does not overwrite the installed immutable release.
+
 ## Distribution
 
 Do not run `release:patch`, `release:minor` or `npm publish` against the community namespace. Do not write community pi.dev/R2 release markers. Community publication jobs are repository-identity guarded; this fork uses GitHub Release artifacts.
