@@ -1,6 +1,6 @@
 {
 	"name": "@earendil-works/pi-codemode",
-	"version": "1.0.4",
+	"version": "1.0.4-fork.1",
 	"description": "Sandboxed JavaScript execution where the only capability is calling injected tools",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -48,7 +48,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
+		"url": "git+https://github.com/chenhaoxiang/pi.git",
 		"directory": "packages/codemode"
 	},
 	"engines": {

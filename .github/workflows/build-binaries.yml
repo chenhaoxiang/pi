@@ -25,6 +25,8 @@ jobs:
   # Keep the public GitHub Release publication last. Binary assets are staged in
   # a draft release first; cleanup removes the draft if later publishing fails.
   build:
+    # This is the community npm/pi.dev pipeline, not the fork distribution channel.
+    if: github.repository == 'earendil-works/pi'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -303,6 +305,7 @@ jobs:
 
   # The pi-env daemon for every remote system @earendil-works/pi-env supports; the npm package ships them all.
   env-daemons:
+    if: github.repository == 'earendil-works/pi'
     uses: ./.github/workflows/env-daemons.yml
     permissions:
       contents: read
@@ -310,6 +313,7 @@ jobs:
       ref: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
 
   publish-npm:
+    if: github.repository == 'earendil-works/pi'
     runs-on: ubuntu-latest
     needs: [stage-github-release, env-daemons]
     environment: npm-publish
@@ -384,6 +388,7 @@ jobs:
         run: node scripts/publish.mjs
 
   announce-pi-dev-release:
+    if: github.repository == 'earendil-works/pi'
     runs-on: ubuntu-latest
     needs: publish-npm
     environment: pi-model-upload

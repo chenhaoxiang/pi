@@ -1,6 +1,6 @@
 {
 	"name": "@earendil-works/pi-mcp",
-	"version": "1.0.4",
+	"version": "1.0.4-fork.1",
 	"description": "Standalone Model Context Protocol client for pi and other applications",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -44,7 +44,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
+		"url": "git+https://github.com/chenhaoxiang/pi.git",
 		"directory": "packages/mcp"
 	},
 	"engines": {

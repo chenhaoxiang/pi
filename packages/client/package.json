@@ -1,6 +1,6 @@
 {
 	"name": "@earendil-works/pi-client",
-	"version": "1.0.4",
+	"version": "1.0.4-fork.1",
 	"description": "Transport-neutral client for remote pi sessions over framed CBOR bytes",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -40,15 +40,15 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
+		"url": "git+https://github.com/chenhaoxiang/pi.git",
 		"directory": "packages/client"
 	},
 	"engines": {
 		"node": ">=22.19.0"
 	},
 	"dependencies": {
-		"@earendil-works/chord": "^1.0.4",
-		"@earendil-works/pi-protocol": "^1.0.4"
+		"@earendil-works/chord": "^1.0.4-fork.1",
+		"@earendil-works/pi-protocol": "^1.0.4-fork.1"
 	},
 	"devDependencies": {
 		"shx": "0.4.0",
