@@ -1,5 +1,18 @@
 # Development Rules
 
+## Maintained fork contract
+
+- This repository is `chenhaoxiang/pi`; `earendil-works/pi` remains the community upstream.
+- `main` is the reviewed maintenance branch. `upstream-main` contains only the community tree, with no fork changes. Never force-push either branch or replace maintenance history with the mirror.
+- The first fork release is based on the exact community `v1.0.4` tag. Public workspace packages use lockstep `1.0.4-fork.1` versions.
+- Fork distributions use immutable GitHub Release assets, source provenance and SHA-256 checksums. Do not publish the community npm identity or write to the community pi.dev/R2 release service.
+- The community release automation below applies only to the community repository. For this fork, use reviewed PRs and the [fork maintenance runbook](packages/coding-agent/docs/fork-maintenance.md).
+- Existing Pi processes are not hot-upgraded by replacing a launcher. Preserve their installation and do not force-restart active sessions.
+
+## Documentation map
+
+- [Fork maintenance](packages/coding-agent/docs/fork-maintenance.md): baseline, disconnect recovery, distribution, validation, installation and rollback boundaries.
+
 ## Conversational Style
 
 - Keep answers short and concise

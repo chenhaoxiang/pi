@@ -60,6 +60,8 @@ test_env=(
 	"NPM_CONFIG_GLOBALCONFIG=$test_root/npm-globalconfig"
 	"NPM_CONFIG_CACHE=$test_root/cache/npm"
 	"PI_NO_LOCAL_LLM=1"
+	# Bound worker pressure so native filesystem watcher tests retain their timing budget.
+	"VITEST_MAX_WORKERS=2"
 	"AWS_EC2_METADATA_DISABLED=true"
 )
 

@@ -130,6 +130,18 @@ function packageNameFromLockPath(lockPath) {
 }
 
 function registryTarballUrl(packageName, version) {
+	const forkRepository = readJson(join(codingAgentDir, "package.json")).piConfig?.forkRepository;
+	if (forkRepository !== undefined) {
+		if (
+			typeof forkRepository !== "string" ||
+			!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(forkRepository) ||
+			!/^\d+\.\d+\.\d+-fork\.[1-9]\d*$/.test(version)
+		) {
+			throw new Error("Invalid fork repository or release version");
+		}
+		const archive = `${packageName.replace(/^@/, "").replace("/", "-")}-${version}.tgz`;
+		return `https://github.com/${forkRepository}/releases/download/v${version}/${archive}`;
+	}
 	const tarballName = packageName.startsWith("@") ? packageName.split("/")[1] : packageName;
 	return `https://registry.npmjs.org/${packageName}/-/${tarballName}-${version}.tgz`;
 }

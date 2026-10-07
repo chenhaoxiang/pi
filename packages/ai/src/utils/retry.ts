@@ -80,6 +80,10 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	"ended without",
 	"stream ended before message_stop",
 	"stream ended before a terminal response event",
+	// OpenAI Responses and compatible proxies can use disconnect/close wording
+	// when the stream ends before response.completed instead of an HTTP error.
+	"stream disconnected before completion",
+	"stream closed before response\\.completed",
 	"http2 request did not get a response",
 	// Node ERR_HTTP2_STREAM_CANCEL: the HTTP/2 session died before the request was
 	// sent, e.g. after the Bedrock SDK's 5-minute session timeout (#10379).
