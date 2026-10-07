@@ -56,4 +56,6 @@ Before switching, verify installed extension compatibility. In particular, older
 
 Rollback restores the saved launcher target and, if changed, the previous pi-subagents package declaration. A disk update is not proof that an active process has reloaded. Restart a Pi session only when its work is settled.
 
+The [1.0.4-fork.1 installed snapshot](fork-installation-2026-10-08.md) records the performing owner's release/runtime attestation separately from this maintained contract.
+
 SAW may associate the core installation with its package repository and fixed release manifest/tag. Such a reference is not a full installed-file integrity proof or a claim that every active process is running the new version.
