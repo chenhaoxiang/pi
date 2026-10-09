@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-10-08
+updated: 2026-10-10
 ssot: true
 owner: chx
 ---
@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The first release is based on community tag `v1.0.4`, commit `7c10bd4337495ee613f2224843ecdf349b80d1df`.
+- `main` is our reviewed maintenance/release branch. The current release is based on exact community tag `v1.1.0`, commit `abe508e1b89912adde45528136c3221eb69acdd7`. The original `v1.0.4-fork.1` release and its community baseline remain immutable history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- Public workspace packages share `1.0.4-fork.1`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- Public workspace packages share `1.1.0-fork.1`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 ## Disconnect recovery
 
@@ -38,7 +38,7 @@ This repairs recovery, not the upstream transport. It does not change provider r
 5. Build/pack and validate the Node consumer outside the repository. Check both bundled CLI and SDK versions. For the local macOS binary, freshly rebuild compiled assets at the exact clean committed release HEAD, then use `build-binaries.sh --skip-install --skip-build --platform darwin-arm64` and verify startup separately. Record that same-HEAD build command/exit status with the artifact hashes; version metadata alone is not binary-to-source proof.
 6. Review the exact commit and run applicable CI before merge/release. Record platform/request smoke tests separately from provider-free tests; do not infer real long-context reliability from synthetic fixtures.
 
-Fork CI hydrates provider data from the immutable `v1.0.4-fork.1` pi-ai release asset, verifies its pinned SHA-256, and runs `build:offline` plus every existing check and test. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
+Fork CI hydrates provider data from the immutable community `v1.1.0` source release asset, verifies SHA-256 `63b17b48b855e36e64c5013523acd48131ffcfa90ae48fe2f3e6fa9fe3d0da32`, and runs `build:offline` plus every existing check and test. This explicit catalog refresh includes the new 1.1.0 model metadata; do not retain the older 1.0.4 catalog while claiming full 1.1.0 model support. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
 
 ## Dependency security maintenance
 
@@ -48,7 +48,7 @@ Review the [dependency security record](fork-dependency-security-2026-10-08.md) 
 
 Do not run `release:patch`, `release:minor` or `npm publish` against the community namespace. Do not write community pi.dev/R2 release markers. Community publication jobs are repository-identity guarded; this fork uses GitHub Release artifacts.
 
-After building, run `node scripts/pack-fork-release.mjs --out <new-directory-outside-checkout> --binary <tested-native-archive>` from a clean committed source. `--candidate` is only for local validation and emits no source/release provenance. This command composes the existing `packReleasePackages` and consumer smoke helpers and installs with local tarball overrides. This prevents accidentally resolving community dependencies for an unpublished fork version. Generated installer locks use fixed GitHub Release URLs when `piConfig.forkRepository` is declared; ordinary community locks retain registry URLs and all external dependency pins.
+After building, run `node scripts/pack-fork-release.mjs --out <new-directory-outside-checkout> --binary <tested-native-archive>` from a clean committed source. `--candidate` is only for local validation and emits no source/release provenance. This command composes the upstream `produceArtifactSet`, `installConsumer` and consumer smoke helpers and installs with local tarball overrides. It copies content-addressed build tarballs to the canonical release filenames expected by the fork installer lock; both refer to the same bytes. This prevents accidentally resolving community dependencies for an unpublished fork version. Generated installer locks use fixed GitHub Release URLs when `piConfig.forkRepository` is declared; ordinary community locks retain registry URLs and all external dependency pins.
 
 Every release includes the 13 public workspace tarballs, Node consumer archive, tested local binary archive, installer-lock pair, source provenance and `SHA256SUMS`. The tested native archive in this release is macOS ARM64; Windows has no native-archive acceptance in this fork packer and would require separately verified Node consumption. Downloaded release assets and checksum entries use flat filenames; the Node consumer archive also retains its internal tarballs directory for local overrides. A release manifest records repository, version, v-tag, exact source commit, community baseline and tarball SHA-256. Publish assets only after source review/CI; download them afresh and verify their checksums before installation. Never replace an existing tag or published asset. Fork workspace entries in the generated installer lock do not contain npm integrity hashes; verifying the downloaded manifest and complete `SHA256SUMS` before installing is mandatory, not an optional substitute for source version matching.
 

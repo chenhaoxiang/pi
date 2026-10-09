@@ -43,12 +43,12 @@ jobs:
         run: |
           mkdir -p tmp/ci-model-data
           curl --fail --location --retry 2 --max-time 120 \
-            https://github.com/chenhaoxiang/pi/releases/download/v1.0.4-fork.1/earendil-works-pi-ai-1.0.4-fork.1.tgz \
-            --output tmp/ci-model-data/pi-ai.tgz
-          echo 'ae27b061b1aa67619df58e58c21cc8ded2bfaa7fe390cb60a10bad263a3f93c6  tmp/ci-model-data/pi-ai.tgz' | sha256sum --check --strict
-          tar -xzf tmp/ci-model-data/pi-ai.tgz --directory tmp/ci-model-data package/dist/providers/data
+            https://github.com/earendil-works/pi/releases/download/v1.1.0/pi-1.1.0-source.tar.gz \
+            --output tmp/ci-model-data/pi-source.tar.gz
+          echo '63b17b48b855e36e64c5013523acd48131ffcfa90ae48fe2f3e6fa9fe3d0da32  tmp/ci-model-data/pi-source.tar.gz' | sha256sum --check --strict
+          tar -xzf tmp/ci-model-data/pi-source.tar.gz --directory tmp/ci-model-data pi-1.1.0/packages/ai/src/providers/data
           mkdir -p packages/ai/src/providers/data
-          cp -R tmp/ci-model-data/package/dist/providers/data/. packages/ai/src/providers/data/
+          cp -R tmp/ci-model-data/pi-1.1.0/packages/ai/src/providers/data/. packages/ai/src/providers/data/
           npm run build:offline
 
       - name: Check

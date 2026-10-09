@@ -4,12 +4,14 @@
 
 - This repository is `chenhaoxiang/pi`; `earendil-works/pi` remains the community upstream.
 - `main` is the reviewed maintenance branch. `upstream-main` contains only the community tree, with no fork changes. Never force-push either branch or replace maintenance history with the mirror.
-- The first fork release is based on the exact community `v1.0.4` tag. Public workspace packages use lockstep `1.0.4-fork.1` versions.
+- The current fork release is based on the exact community `v1.1.0` tag. Public workspace packages use lockstep `1.1.0-fork.1` versions. Retain prior fork fixes and immutable release history.
 - Fork distributions use immutable GitHub Release assets, source provenance and SHA-256 checksums. Do not publish the community npm identity or write to the community pi.dev/R2 release service.
 - The community release automation below applies only to the community repository. For this fork, use reviewed PRs and the [fork maintenance runbook](packages/coding-agent/docs/fork-maintenance.md).
 - Existing Pi processes are not hot-upgraded by replacing a launcher. Preserve their installation and do not force-restart active sessions.
 
 ## Documentation map
+
+- [1.1.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.1.0-2026-10-10.md): exact community baseline, retained fork boundaries, packaging adaptations and validation limits.
 
 - [Dependency security maintenance](packages/coding-agent/docs/fork-dependency-security-2026-10-08.md): exact corrected resolutions, standalone sandbox coverage and two retained upstream high findings.
 
