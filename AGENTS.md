@@ -11,7 +11,7 @@
 
 ## Documentation map
 
-- [1.1.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.1.0-2026-10-10.md): exact community baseline, retained fork boundaries, packaging adaptations and validation limits.
+- [1.1.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.1.0-2026-10-10.md): exact community baseline, retained fork boundaries, published source/assets, installed acceptance, rollback and validation limits.
 
 - [Dependency security maintenance](packages/coding-agent/docs/fork-dependency-security-2026-10-08.md): exact corrected resolutions, standalone sandbox coverage and two retained upstream high findings.
 
