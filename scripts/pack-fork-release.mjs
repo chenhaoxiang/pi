@@ -41,7 +41,12 @@ if (!candidate && execFileSync("git", ["-C", root, "status", "--porcelain"], { e
 const packages = getPublicWorkspacePackages();
 if (packages.some((entry) => entry.version !== version)) throw new Error("Public workspace versions must be lockstep");
 mkdirSync(output, { recursive: true });
-const artifactSet = produceArtifactSet({ build: false, outDir: join(output, "package-artifacts"), repoRoot: root });
+const artifactSet = produceArtifactSet({
+	build: false,
+	outDir: join(output, "package-artifacts"),
+	repoRoot: root,
+	source: candidate ? null : undefined,
+});
 const tarballDirectory = join(output, "tarballs");
 mkdirSync(tarballDirectory);
 const tarballs = new Map();
