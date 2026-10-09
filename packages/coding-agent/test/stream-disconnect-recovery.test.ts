@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
-import { type AssistantMessage, type AssistantMessageEvent, EventStream, getModel } from "@earendil-works/pi-ai/compat";
+import { type AssistantMessage, createAssistantMessageEventStream, getModel } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
@@ -13,19 +13,6 @@ import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils
 import { createTestResourceLoader } from "./utilities.ts";
 
 const disconnected = "stream error: stream disconnected before completion: stream closed before response.completed";
-
-class ResponseStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
-	constructor() {
-		super(
-			(event) => event.type === "done" || event.type === "error",
-			(event) => {
-				if (event.type === "done") return event.message;
-				if (event.type === "error") return event.error;
-				throw new Error("Unexpected stream event");
-			},
-		);
-	}
-}
 
 function response(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
 	return {
@@ -80,7 +67,8 @@ describe("Responses disconnect session recovery", () => {
 			streamFn: (_model, context) => {
 				calls++;
 				projections.push(JSON.stringify(context.messages));
-				const stream = new ResponseStream();
+				// Pi 1.1.0 requires its concrete stream for duration accounting.
+				const stream = createAssistantMessageEventStream();
 				queueMicrotask(() => {
 					const message =
 						calls === 1

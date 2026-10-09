@@ -4,7 +4,9 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { installCodingAgentConsumer, packReleasePackages, smokeTestCodingAgentConsumer } from "./coding-agent-consumer.mjs";
+import { installConsumer, smokeTestNpmConsumer } from "./local-package-install.mjs";
+import { produceArtifactSet } from "./package-artifacts.mjs";
+import { codingAgentName, smokeTestCodingAgent } from "./coding-agent-smoke.mjs";
 import { getPublicWorkspacePackages } from "./release-packages.mjs";
 import { isMaintainedForkVersion } from "../packages/coding-agent/src/utils/fork-version.ts";
 
@@ -39,10 +41,21 @@ if (!candidate && execFileSync("git", ["-C", root, "status", "--porcelain"], { e
 const packages = getPublicWorkspacePackages();
 if (packages.some((entry) => entry.version !== version)) throw new Error("Public workspace versions must be lockstep");
 mkdirSync(output, { recursive: true });
-const tarballs = packReleasePackages(packages, join(output, "tarballs"));
+const artifactSet = produceArtifactSet({ build: false, outDir: join(output, "package-artifacts"), repoRoot: root });
+const tarballDirectory = join(output, "tarballs");
+mkdirSync(tarballDirectory);
+const tarballs = new Map();
+for (const artifact of artifactSet.packages) {
+	const filename = `${artifact.name.replace(/^@/, "").replace("/", "-")}-${artifact.version}.tgz`;
+	const target = join(tarballDirectory, filename);
+	cpSync(artifact.tarballPath, target);
+	artifact.tarballPath = target;
+	tarballs.set(artifact.name, target);
+}
 const consumer = join(output, "node");
-installCodingAgentConsumer(consumer, tarballs);
-smokeTestCodingAgentConsumer(consumer);
+installConsumer({ artifactSet, directory: consumer, packageNames: [codingAgentName] });
+smokeTestNpmConsumer({ artifactSet, directory: consumer, packageName: codingAgentName });
+smokeTestCodingAgent(consumer);
 symlinkSync("node_modules/.bin/pi", join(consumer, "pi"));
 const digest = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
 const assets = [...tarballs.values()].map((file) => {

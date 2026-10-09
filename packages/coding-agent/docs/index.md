@@ -36,6 +36,8 @@ For platform-specific help, see [Terminal Setup](terminal-setup.md), [Windows](w
 
 For the maintained `chenhaoxiang/pi` distribution, see [Fork maintenance and rollback](fork-maintenance.md). Its release channel and community mirror are distinct from the community installer. The [1.0.4-fork.1 installation snapshot](fork-installation-2026-10-08.md) records release and local acceptance boundaries.
 
+For the current baseline and integration acceptance, see [1.1.0-fork.1 upgrade](fork-upgrade-1.1.0-2026-10-10.md). Previous release snapshots remain historical records.
+
 For development dependency remediation and remaining upstream advisories, see [Dependency security maintenance](fork-dependency-security-2026-10-08.md). This is distinct from the immutable installed release.
 
 ## Work safely
