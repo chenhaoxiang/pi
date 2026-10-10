@@ -11,6 +11,8 @@
 
 ## Documentation map
 
+- [Local extension maintenance](packages/coding-agent/docs/fork-local-extension-maintenance.md): host-owned SDK peers, immutable npm resources, browser/memory handover and rollback; coordination plan at `openspec/changes/local-plugin-upgrade-1-1-0/`.
+
 - [1.1.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.1.0-2026-10-10.md): exact community baseline, retained fork boundaries, published source/assets, installed acceptance, rollback and validation limits.
 
 - [Dependency security maintenance](packages/coding-agent/docs/fork-dependency-security-2026-10-08.md): exact corrected resolutions, standalone sandbox coverage and two retained upstream high findings.
