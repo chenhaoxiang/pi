@@ -47,6 +47,7 @@ test("does not follow symlinked children or accept a symlink root", (t) => {
 	assert.equal(result.files, 0);
 	assert.equal(result.skippedSymlinks, 1);
 	assert.throws(() => inspectDebugRetention(path.join(root, "linked")), /non-symlink/);
+	assert.throws(() => inspectDebugRetention(path.join(root, "linked") + path.sep), /non-symlink/);
 });
 
 test("rejects invalid retention thresholds", (t) => {

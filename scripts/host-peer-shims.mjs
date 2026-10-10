@@ -14,11 +14,31 @@ function manifest(root) {
 	return JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 }
 
+function validateHost(root, pkg) {
+	if (pkg.piHostPeerShim === true) throw new Error("Generated peer shims cannot be used as a Pi host.");
+	if (pkg.name !== "@earendil-works/pi-coding-agent" || !/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-fork\.[1-9]\d*)?$/.test(pkg.version ?? "")) {
+		throw new Error("Expected an identified stable Pi host, not a shim, unknown package or arbitrary prerelease.");
+	}
+	if (typeof pkg.bin?.pi !== "string") throw new Error("Expected a real Pi host with a declared bin.pi entry.");
+	const cli = fs.realpathSync(path.resolve(root, pkg.bin.pi));
+	if (!cli.startsWith(`${fs.realpathSync(root)}${path.sep}`) || !fs.statSync(cli).isFile()) {
+		throw new Error("Pi host launcher escapes package or is not a file.");
+	}
+	return cli;
+}
+
 export function resolveLauncherHost(launcher) {
-	let current = path.dirname(fs.realpathSync(launcher));
+	const actualLauncher = fs.realpathSync(launcher);
+	let current = path.dirname(actualLauncher);
 	while (path.dirname(current) !== current) {
 		const candidate = path.join(current, "package.json");
-		if (fs.existsSync(candidate) && manifest(current).name === "@earendil-works/pi-coding-agent") return current;
+		if (fs.existsSync(candidate)) {
+			const pkg = manifest(current);
+			if (pkg.name === "@earendil-works/pi-coding-agent") {
+				if (validateHost(current, pkg) !== actualLauncher) throw new Error("Selected launcher differs from the host's declared bin.pi.");
+				return current;
+			}
+		}
 		current = path.dirname(current);
 	}
 	throw new Error("Launcher does not resolve inside a Node Pi coding-agent package; pass --host explicitly for a native launcher.");
@@ -59,9 +79,7 @@ function resolveEntry(root, pkg, subpath) {
 export function planHostPeers(host) {
 	host = fs.realpathSync(host);
 	const owner = manifest(host);
-	if (owner.name !== "@earendil-works/pi-coding-agent" || !/^\d+\.\d+\.\d+(?:-fork\.[1-9]\d*)?$/.test(owner.version ?? "")) {
-		throw new Error("Expected an identified stable Pi host, not a shim, unknown package or arbitrary prerelease.");
-	}
+	validateHost(host, owner);
 	const packages = [];
 	for (const [folder, entries] of peers) {
 		const name = `@earendil-works/${folder}`;
@@ -82,15 +100,27 @@ export function planHostPeers(host) {
 			files[relative] = `export * from ${JSON.stringify(pathToFileURL(target).href)};\n`;
 		}
 		exports["./package.json"] = "./package.json";
-		files["package.json"] = `${JSON.stringify({ name, version: pkg.version, private: true, type: "module", main: "./index.js", exports }, null, 2)}\n`;
+		files["package.json"] = `${JSON.stringify({ name, version: pkg.version, private: true, piHostPeerShim: true, type: "module", main: "./index.js", exports }, null, 2)}\n`;
 		packages.push({ folder, files });
 	}
 	return { host, version: owner.version, packages };
 }
 
 export function writeHostPeers(plan, output) {
-	if (fs.existsSync(output)) throw new Error("Output already exists; never overwrite shims belonging to a running consumer.");
-	fs.mkdirSync(output, { recursive: true, mode: 0o700 });
+	output = path.resolve(output);
+	const parent = path.dirname(output);
+	fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
+	const parentStat = fs.lstatSync(parent);
+	if (!parentStat.isDirectory() || parentStat.isSymbolicLink() ||
+		(typeof process.getuid === "function" && (parentStat.uid !== process.getuid() || (parentStat.mode & 0o022) !== 0))) {
+		throw new Error("Output parent must be a trusted owner-owned, non-symlink directory.");
+	}
+	try {
+		fs.mkdirSync(output, { mode: 0o700 });
+	} catch (error) {
+		if (error.code === "EEXIST") throw new Error("Output already exists; never overwrite shims belonging to a running consumer.");
+		throw error;
+	}
 	for (const pkg of plan.packages) {
 		for (const [relative, content] of Object.entries(pkg.files)) {
 			const target = path.join(output, pkg.folder, relative);

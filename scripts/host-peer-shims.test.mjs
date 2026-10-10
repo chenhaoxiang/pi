@@ -21,7 +21,7 @@ function fixture(t, hoisted = false) {
 	for (const [name, map] of Object.entries(exports)) {
 		const packageRoot = name === "pi-coding-agent" || hoisted ? path.join(modules, name) : path.join(host, "node_modules", "@earendil-works", name);
 		fs.mkdirSync(packageRoot, { recursive: true });
-		fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: `@earendil-works/${name}`, version: "1.1.0-fork.1", main: "dist/index.js", exports: map }));
+		fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: `@earendil-works/${name}`, version: "1.1.0-fork.1", bin: name === "pi-coding-agent" ? { pi: "dist/bundle/cli.js" } : undefined, main: "dist/index.js", exports: map }));
 		for (const file of ["index.js", "compat.js", "oauth.js", "bundle/rpc-entry.js", "providers/all.js", "context/index.js", "bundle/cli.js"]) {
 			const target = path.join(packageRoot, "dist", file);
 			fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -63,8 +63,10 @@ test("rejects unknown hosts and arbitrary prereleases", (t) => {
 	const f = fixture(t);
 	const target = path.join(f.host, "package.json");
 	const pkg = JSON.parse(fs.readFileSync(target, "utf8"));
-	fs.writeFileSync(target, JSON.stringify({ ...pkg, version: "1.1.0-beta.1" }));
-	assert.throws(() => planHostPeers(f.host), /identified stable/);
+	for (const version of ["1.1.0-beta.1", "01.1.0-fork.1", "1.01.0-fork.1", "1.1.00-fork.1", "1.1.0-fork.01"]) {
+		fs.writeFileSync(target, JSON.stringify({ ...pkg, version }));
+		assert.throws(() => planHostPeers(f.host), /identified stable/);
+	}
 	fs.writeFileSync(target, JSON.stringify({ ...pkg, name: "fake" }));
 	assert.throws(() => planHostPeers(f.host), /identified stable/);
 });
@@ -77,6 +79,54 @@ test("rejects missing and mismatched host peers", (t) => {
 	assert.throws(() => planHostPeers(f.host), /Peer version differs/);
 	fs.unlinkSync(peer);
 	assert.throws(() => planHostPeers(f.host), /Missing host peer/);
+});
+
+test("rejects a generated shim tree as the host in standard node_modules layout", (t) => {
+	const f = fixture(t);
+	const out = path.join(f.root, "consumer/node_modules/@earendil-works");
+	writeHostPeers(planHostPeers(f.host), out);
+	assert.throws(() => planHostPeers(path.join(out, "pi-coding-agent")), /shims cannot/);
+});
+
+test("requires a real bin.pi and verifies the selected launcher identity", (t) => {
+	const f = fixture(t);
+	const file = path.join(f.host, "package.json");
+	const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
+	fs.writeFileSync(file, JSON.stringify({ ...pkg, bin: undefined }));
+	assert.throws(() => planHostPeers(f.host), /bin.pi/);
+	fs.writeFileSync(file, JSON.stringify(pkg));
+	assert.throws(() => resolveLauncherHost(path.join(f.host, "dist/index.js")), /differs/);
+});
+
+test("exclusive output creation rejects existing directories and symlinks", (t) => {
+	const f = fixture(t);
+	const plan = planHostPeers(f.host);
+	fs.mkdirSync(f.out);
+	assert.throws(() => writeHostPeers(plan, f.out), /already exists/);
+	const linked = path.join(f.root, "linked-output");
+	try {
+		fs.symlinkSync(f.out, linked, "dir");
+	} catch {
+		t.skip("symlink support unavailable");
+		return;
+	}
+	assert.throws(() => writeHostPeers(plan, linked), /already exists/);
+	assert.deepEqual(fs.readdirSync(f.out), []);
+});
+
+test("rejects an output directory claimed immediately before exclusive creation", (t) => {
+	const f = fixture(t);
+	const plan = planHostPeers(f.host);
+	const mkdir = fs.mkdirSync;
+	t.mock.method(fs, "mkdirSync", (directory, options) => {
+		if (directory === f.out) {
+			assert.equal(options.recursive, undefined);
+			mkdir(f.out);
+		}
+		return mkdir(directory, options);
+	});
+	assert.throws(() => writeHostPeers(plan, f.out), /already exists/);
+	assert.deepEqual(fs.readdirSync(f.out), []);
 });
 
 test("rejects runtime exports outside their owner package", (t) => {

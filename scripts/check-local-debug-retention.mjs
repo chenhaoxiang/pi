@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** Metadata-only inspection. Never follows symlinks or reads/removes artifact contents. */
+/** Metadata-only inspection. Skips observed symlinks; concurrent replacements are not a security boundary. */
 export function inspectDebugRetention(root, options = {}) {
 	const maxBytes = options.maxBytes ?? 2 * 1024 ** 3;
 	const olderThanDays = options.olderThanDays ?? 14;
@@ -10,6 +10,7 @@ export function inspectDebugRetention(root, options = {}) {
 	if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || !Number.isSafeInteger(olderThanDays) || olderThanDays < 0) {
 		throw new Error("Retention thresholds must be nonnegative safe integers.");
 	}
+	root = path.resolve(root);
 	const rootStat = fs.lstatSync(root);
 	if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) throw new Error("Expected a non-symlink debug artifact directory.");
 	let files = 0;
@@ -17,7 +18,7 @@ export function inspectDebugRetention(root, options = {}) {
 	let oldFiles = 0;
 	let oldBytes = 0;
 	let skippedSymlinks = 0;
-	const stack = [path.resolve(root)];
+	const stack = [root];
 	while (stack.length) {
 		const directory = stack.pop();
 		for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {

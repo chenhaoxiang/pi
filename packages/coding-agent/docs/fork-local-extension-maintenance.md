@@ -23,7 +23,7 @@ node scripts/host-peer-shims.mjs --launcher /path/to/pi --out /new/permanent/shi
 node scripts/host-peer-shims.mjs --launcher /path/to/pi --check /new/permanent/shims/version
 ```
 
-For a native launcher, explicitly select the separately verified Node SDK host with `--host /path/to/package`. The tool never guesses a native binary's module tree. The `pi-ai` bare root uses the host compat export, matching Pi's extension mapping. Removed `pi-agent-core/node` is not recreated. Missing exports, version drift, arbitrary prereleases, unidentified packages and exports escaping their owner fail closed. Existing output directories are never overwritten.
+For a native launcher, explicitly select the separately verified Node SDK host with `--host /path/to/package`. The tool never guesses a native binary's module tree. The `pi-ai` bare root uses the host compat export, matching Pi's extension mapping. Removed `pi-agent-core/node` is not recreated. Missing exports, version drift, arbitrary prereleases, unidentified packages and exports escaping their owner fail closed. Generated manifests carry an explicit shim marker and are rejected as hosts; a real host must declare its package-contained `bin.pi`, and launcher mode must match that exact realpath. The new output leaf is created exclusively in a trusted owner-owned parent (not group/world-writable); existing directories or symlinks fail instead of being reused.
 
 Wrapper checks establish host selection and exact generated wrapper content, not cryptographic verification of every host byte. Core release checksum verification is separate. Record prior links/metadata before selecting a new shim set; retain old sets for running consumers. A subsequent core upgrade requires regenerating/selecting a new set, not editing an immutable set in place.
 
@@ -38,7 +38,7 @@ Current selected third-party versions are web-access `0.38.0`, powerline-footer 
 The coordination contract is [local-plugin-upgrade-1-1-0](../../../openspec/changes/local-plugin-upgrade-1-1-0/proposal.md).
 
 Debug artifact retention is inspected, not silently pruned. Run
-`scripts/check-local-debug-retention.mjs <artifact-root>` against a local artifact
+`node scripts/check-local-debug-retention.mjs <artifact-root>` against a local artifact
 root to report file count, bytes, files older than 14 days, symlink skips and the
 2 GiB alert threshold. The checker uses metadata only, skips observed symlinks,
 never reads or removes artifact bodies, and does not enforce a hard capacity cap;
@@ -57,7 +57,7 @@ Use real reviewed merges for extension forks and a pure fast-forward community m
 
 ## 2026-10-10 installed acceptance
 
-- The selected core and all five bare SDK peers resolve `1.1.0-fork.1`; nine synthetic peer/retention regressions and `npm run check` pass. Existing core release assets are unchanged.
+- The selected core and all five bare SDK peers resolve `1.1.0-fork.1`; thirteen synthetic peer/retention regressions and `npm run check` pass. Existing core release assets are unchanged.
 - The exact side-by-side npm resource tree and Playwriter tree each report zero current npm audit findings. Old installation bytes are retained, not claimed sanitized.
 - Subagents `0.76.1-fork.3` and compaction `0.7.4-fork.1` were reviewed, merged, released with verified checksums and selected locally. Their source/CI/artifact/test limitations are owned by the [subagents acceptance report](https://github.com/chenhaoxiang/pi-subagents/blob/main/docs/maintenance/2026-10-10-community-performance.md) and [compaction acceptance report](https://github.com/chenhaoxiang/pi-better-compaction/blob/main/docs/maintenance/2026-10-10-community-0.7.4.md), not duplicated here.
 - Playwriter MCP/CLI and relay select `0.8.0` with telemetry disabled. The manually loaded Chrome `0.8.0` extension is connected; an owned SDK connection bound that version and verified zero implicit pages, creating/navigating/reading none. An older `0.7.0` extension on another profile remains untouched. Multiple profiles require explicit selection. The old auto-enable variable is retired; no default `page` exists in 0.8. Codex Chrome `1.4.1` bridge reconnection is healthy. These checks do not claim real-site interaction acceptance.
