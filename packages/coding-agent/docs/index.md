@@ -40,6 +40,8 @@ For the current baseline and integration acceptance, see [1.1.0-fork.1 upgrade](
 
 For development dependency remediation and remaining upstream advisories, see [Dependency security maintenance](fork-dependency-security-2026-10-08.md). This is distinct from the immutable installed release.
 
+For host-owned SDK peers, pinned extension resources, browser/memory handover and local rollback, see [Local extension maintenance](fork-local-extension-maintenance.md).
+
 ## Work safely
 
 Pi's tools and extensions run with the permissions of the Pi process. Project trust controls which project resources Pi loads, but it does not sandbox tool calls. Review [Security](security.md) before using untrusted files, repositories, extensions, or unattended automation.
