@@ -35,7 +35,7 @@ Current selected third-party versions are web-access `0.38.0`, powerline-footer 
 
 ## Ordered extension and service handover
 
-The coordination contract is [local-plugin-upgrade-1-1-0](../../../openspec/changes/local-plugin-upgrade-1-1-0/proposal.md).
+The source-owned coordination contract is [local-plugin-upgrade-1-1-0](https://github.com/chenhaoxiang/pi/blob/main/openspec/changes/local-plugin-upgrade-1-1-0/proposal.md). It is outside the published coding-agent package, so this link uses the fork repository rather than an unpacked package-relative path.
 
 Debug artifact retention is inspected, not silently pruned. Run
 `node scripts/check-local-debug-retention.mjs <artifact-root>` against a local artifact
@@ -63,6 +63,12 @@ Use real reviewed merges for extension forks and a pure fast-forward community m
 - Playwriter MCP/CLI and relay select `0.8.0` with telemetry disabled. The manually loaded Chrome `0.8.0` extension is connected; an owned SDK connection bound that version and verified zero implicit pages, creating/navigating/reading none. An older `0.7.0` extension on another profile remains untouched. Multiple profiles require explicit selection. The old auto-enable variable is retired; no default `page` exists in 0.8. Codex Chrome `1.4.1` bridge reconnection is healthy. These checks do not claim real-site interaction acceptance.
 - Hindsight API/control-plane `0.10.3` are staged with a verified pre-upgrade database archive, compatible dependency check and 14 profile/2 adapter offline tests. Per owner decision, live API, global control-plane and normal management scripts remain `0.10.2`; no migration or service switch is claimed. The Coding Agents runtime remains `0.8.0` with `autoUpdate=false`; tokens, bank routing, embedding dimensions and long-reasoning policy are unchanged. Hindsight's local owner runbook contains the held handover and rollback, not this public repository.
 - Floating Git resources now use the verified installed commit or immutable fork tags. Dirty package caches were not reset. Daily compaction debug/payload/response logging is off and redaction remains enabled. The metadata-only inspection reports about 1.48 GiB of existing artifacts, without reading or deleting bodies; the 14-day/2 GiB defaults are alerts, not automatic rotation or a hard writer cap.
+
+## Source closure
+
+[Core maintenance PR #7](https://github.com/chenhaoxiang/pi/pull/7) merged as `b7803efd5c382c8260fd190293dc64c00a2dad3b`; exact reviewed head `ec6d0c0de0eae94f7137596da4f53c4db932e462` passed [CI run 38016088456, attempt 2](https://github.com/chenhaoxiang/pi/actions/runs/38016088456). Initial review found two P1 and three P2 maintenance-helper issues; all were repaired and rechecked with no current findings. The original fixed-head CI failure was an existing durable-runtime socket-connect fixture (`ENOENT`); one bounded failed-job rerun passed. Its failure record remains, and no assertion was weakened.
+
+The owner acceptance follow-ups [subagents PR #21](https://github.com/chenhaoxiang/pi-subagents/pull/21) and [compaction PR #17](https://github.com/chenhaoxiang/pi-better-compaction/pull/17) also passed exact-head review/CI and merged normally. All three canonical main checkouts were safely fast-forwarded and read back. This is a source/documentation closure, not a new core release or a forced session restart. The existing `v1.1.0-fork.1` source and release assets remain unchanged.
 
 ## Verification and restart boundaries
 
