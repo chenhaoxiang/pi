@@ -42,6 +42,24 @@ test("resolves a symlinked launcher and hoisted peers", (t) => {
 	assert.match(plan.packages.find((p) => p.folder === "pi-ai").files["index.js"], /compat\.js/);
 });
 
+test("allows a Pi 1.2 host without the optional chord peer", (t) => {
+	const f = fixture(t);
+	fs.rmSync(path.join(f.host, "node_modules", "@earendil-works", "chord"), { recursive: true, force: true });
+	assert.throws(() => planHostPeers(f.host), /Missing host peer @earendil-works\/chord/);
+	for (const folder of ["pi-coding-agent", "pi-agent-core", "pi-ai", "pi-tui"]) {
+		const file = path.join(folder === "pi-coding-agent" ? f.host : path.join(f.host, "node_modules", "@earendil-works", folder), "package.json");
+		const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
+		fs.writeFileSync(file, JSON.stringify({ ...pkg, version: "1.2.0-fork.1" }));
+	}
+	const plan = planHostPeers(f.host);
+	assert.equal(plan.packages.length, 4);
+	assert.equal(plan.packages.some((pkg) => pkg.folder === "chord"), false);
+	const hostManifest = path.join(f.host, "package.json");
+	const pkg = JSON.parse(fs.readFileSync(hostManifest, "utf8"));
+	fs.writeFileSync(hostManifest, JSON.stringify({ ...pkg, dependencies: { "@earendil-works/chord": "1.2.0-fork.1" } }));
+	assert.throws(() => planHostPeers(f.host), /Missing host peer @earendil-works\/chord/);
+});
+
 test("writes and checks nested host peers without a removed core/node export", (t) => {
 	const f = fixture(t);
 	const plan = planHostPeers(f.host);

@@ -8,15 +8,15 @@ verified: 2026-10-10
 verified_by: manual
 ---
 
-# Local extension maintenance after Pi 1.1.0
+# Local extension maintenance after Pi 1.2.0
 
-This runbook coordinates the owner-authorized local maintenance after installing `1.1.0-fork.1`. It does not modify core provider routing, credentials, timeouts or session history. Extension behavior, releases and tests stay owned by their individual repositories.
+This runbook coordinates the owner-authorized local maintenance after installing `1.2.0-fork.1`. It does not modify core provider routing, credentials, timeouts or session history. Extension behavior, releases and tests stay owned by their individual repositories.
 
 ## SDK peer identity
 
 A hardcoded package-manager prefix can keep standalone scripts on a community SDK after the default launcher selects a maintained fork. The host's extension loader and subagent runner already have their own peer mappings; that does not repair a separate bare Node import.
 
-Use `scripts/host-peer-shims.mjs` from this fork to resolve the actual Node launcher, validate the identified stable host and all five lockstep peer packages, then generate into a new directory:
+Use `scripts/host-peer-shims.mjs` from this fork to resolve the actual Node launcher, validate the identified stable host and its lockstep peer packages (four required SDK peers, plus chord only when present), then generate into a new directory:
 
 ```sh
 node scripts/host-peer-shims.mjs --launcher /path/to/pi --out /new/permanent/shims/version

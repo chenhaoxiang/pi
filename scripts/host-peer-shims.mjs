@@ -89,6 +89,12 @@ export function planHostPeers(host) {
 			if (fs.existsSync(path.join(candidate, "package.json")) && manifest(candidate).name === name) root = candidate;
 			if (path.dirname(parent) === parent) break;
 		}
+		// Only the identified 1.2+ host that no longer declares chord may omit it.
+		// Older or declared-but-missing installs remain fail-closed.
+		const [major, minor] = owner.version.split(".").map(Number);
+		const chordOptional = folder === "chord" && (major > 1 || (major === 1 && minor >= 2))
+			&& !Object.hasOwn(owner.dependencies ?? {}, name) && !Object.hasOwn(owner.optionalDependencies ?? {}, name);
+		if (!root && chordOptional) continue;
 		if (!root) throw new Error(`Missing host peer ${name}`);
 		const pkg = manifest(root);
 		if (pkg.version !== owner.version) throw new Error(`Peer version differs from host: ${name}@${pkg.version}, host=${owner.version}`);
