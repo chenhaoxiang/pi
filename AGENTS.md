@@ -11,7 +11,7 @@
 
 ## Documentation map
 
-- [1.2.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.2.0-2026-10-14.md): exact community baseline, Pi 1.2 package-graph migration, retained fork behavior and validation/install boundaries.
+- [1.2.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.2.0-2026-10-14.md): exact community baseline plus three selected validation fixes, Pi 1.2 package-graph migration, retained fork behavior, immutable release and installed-byte/RPC/rollback acceptance.
 
 - [Local extension maintenance](packages/coding-agent/docs/fork-local-extension-maintenance.md): host-owned SDK peers, immutable npm resources, browser/memory handover and rollback; coordination plan at `openspec/changes/local-plugin-upgrade-1-1-0/`.
 
