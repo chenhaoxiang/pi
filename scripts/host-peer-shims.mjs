@@ -89,6 +89,10 @@ export function planHostPeers(host) {
 			if (fs.existsSync(path.join(candidate, "package.json")) && manifest(candidate).name === name) root = candidate;
 			if (path.dirname(parent) === parent) break;
 		}
+		// Pi 1.2.0 no longer declares or ships chord. Keep the optional peer out of
+		// generated shims when the selected host has no chord package; if it is
+		// present, retain the exact-version check and export validation below.
+		if (!root && folder === "chord") continue;
 		if (!root) throw new Error(`Missing host peer ${name}`);
 		const pkg = manifest(root);
 		if (pkg.version !== owner.version) throw new Error(`Peer version differs from host: ${name}@${pkg.version}, host=${owner.version}`);

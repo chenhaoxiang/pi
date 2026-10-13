@@ -42,6 +42,14 @@ test("resolves a symlinked launcher and hoisted peers", (t) => {
 	assert.match(plan.packages.find((p) => p.folder === "pi-ai").files["index.js"], /compat\.js/);
 });
 
+test("allows a Pi 1.2 host without the optional chord peer", (t) => {
+	const f = fixture(t);
+	fs.rmSync(path.join(f.host, "node_modules", "@earendil-works", "chord"), { recursive: true, force: true });
+	const plan = planHostPeers(f.host);
+	assert.equal(plan.packages.length, 4);
+	assert.equal(plan.packages.some((pkg) => pkg.folder === "chord"), false);
+});
+
 test("writes and checks nested host peers without a removed core/node export", (t) => {
 	const f = fixture(t);
 	const plan = planHostPeers(f.host);
