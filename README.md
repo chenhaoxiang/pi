@@ -14,7 +14,7 @@
 
 ## Maintained fork
 
-This is the maintained `chenhaoxiang/pi` fork of [earendil-works/pi](https://github.com/earendil-works/pi). The current release, **1.1.0-fork.1**, uses the exact community v1.1.0 baseline and retains our bounded Responses disconnect recovery, fork update-channel protection and dependency security fixes. It does not eliminate upstream disconnects or change model/context limits.
+This is the maintained `chenhaoxiang/pi` fork of [earendil-works/pi](https://github.com/earendil-works/pi). The current release, **1.2.0-fork.1**, uses the exact community v1.2.0 baseline and retains our bounded Responses disconnect recovery, fork update-channel protection and dependency security fixes. It does not eliminate upstream disconnects or change model/context limits.
 
 `main` carries reviewed fork changes; `upstream-main` is the untouched community mirror. Use the pinned assets from [this fork's GitHub Releases](https://github.com/chenhaoxiang/pi/releases), not the community installer/npm commands below, when installing this fork. Community self-update and its banner are disabled for canonical maintained fork versions; extension updates remain separate. See the [maintenance and rollback runbook](packages/coding-agent/docs/fork-maintenance.md).
 
@@ -83,7 +83,7 @@ This monorepo contains the Pi CLI and its supporting libraries.
 
 | Package | Description |
 |---------|-------------|
-| **[@earendil-works/chord](packages/chord)** | Standalone application-composition runtime for services, replicated state, RPC, and plugins |
+| **[@earendil-works/chord](packages/chord)** | Typed host runtime for hot-reloadable plugins, contracts, replicated state, and RPC over JSON links |
 | **[@earendil-works/pi-telemetry](packages/telemetry)** | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas |
 | **[@earendil-works/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
 | **[@earendil-works/pi-durable](packages/durable)** | Durable conversation, task, and document runtime |

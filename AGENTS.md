@@ -4,12 +4,14 @@
 
 - This repository is `chenhaoxiang/pi`; `earendil-works/pi` remains the community upstream.
 - `main` is the reviewed maintenance branch. `upstream-main` contains only the community tree, with no fork changes. Never force-push either branch or replace maintenance history with the mirror.
-- The current fork release is based on the exact community `v1.1.0` tag. Public workspace packages use lockstep `1.1.0-fork.1` versions. Retain prior fork fixes and immutable release history.
+- The current fork release is based on the exact community `v1.2.0` tag. The 10 remaining public workspace packages use lockstep `1.2.0-fork.1` versions. Retain prior fork fixes and immutable release history.
 - Fork distributions use immutable GitHub Release assets, source provenance and SHA-256 checksums. Do not publish the community npm identity or write to the community pi.dev/R2 release service.
 - The community release automation below applies only to the community repository. For this fork, use reviewed PRs and the [fork maintenance runbook](packages/coding-agent/docs/fork-maintenance.md).
 - Existing Pi processes are not hot-upgraded by replacing a launcher. Preserve their installation and do not force-restart active sessions.
 
 ## Documentation map
+
+- [1.2.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.2.0-2026-10-14.md): exact community baseline, Pi 1.2 package-graph migration, retained fork behavior and validation/install boundaries.
 
 - [Local extension maintenance](packages/coding-agent/docs/fork-local-extension-maintenance.md): host-owned SDK peers, immutable npm resources, browser/memory handover and rollback; coordination plan at `openspec/changes/local-plugin-upgrade-1-1-0/`.
 
