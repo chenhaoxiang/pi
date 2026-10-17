@@ -12,7 +12,7 @@ owner: chx
 
 ## Scope and source
 
-Integrate exact community tag `v1.3.0` at `71023aec1546d6d677a65669c5665c0927ce0dd0` into the maintained fork, from fork main `0d1de82716bbb2cc939340917f76ac8d6b6f11f4`. Later unreleased community commits are not included. The ten public workspace packages use `1.3.0-fork.1`; upstream's new exact internal dependency pins are retained with the fork version.
+Integrate exact community tag `v1.3.0` at `71023aec1546d6d677a65669c5665c0927ce0dd0` into the maintained fork, from fork main `0d1de82716bbb2cc939340917f76ac8d6b6f11f4`. Later unreleased community commits are not included except the two selected validation fixes cherry-picked with provenance: `14ff455a0aaa5cf20f75a0326beb14ff59c9bd98` for deterministic env differential coverage and `99fe1489707f9f6accbef4377be79ef0544c42f2` for updated Xiaomi model fixtures. The ten public workspace packages use `1.3.0-fork.1`; upstream's new exact internal dependency pins are retained with the fork version.
 
 Retain Responses disconnect recovery, failed-attempt projection/tool-result preservation, community self-update refusal, fork installer asset URLs and dependency-security overrides. No provider credentials, model configuration or sharing preferences are changed by installation. Community model-switching, cache, parsing, tool restoration, codemode worker, Chord and Durable changes follow the exact tag.
 
