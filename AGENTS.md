@@ -4,12 +4,14 @@
 
 - This repository is `chenhaoxiang/pi`; `earendil-works/pi` remains the community upstream.
 - `main` is the reviewed maintenance branch. `upstream-main` contains only the community tree, with no fork changes. Never force-push either branch or replace maintenance history with the mirror.
-- The current fork release is based on the exact community `v1.2.0` tag. The 10 remaining public workspace packages use lockstep `1.2.0-fork.1` versions. Retain prior fork fixes and immutable release history.
+- The current fork release is based on the exact community `v1.3.0` tag. The 10 remaining public workspace packages use lockstep `1.3.0-fork.1` versions. Retain prior fork fixes and immutable release history.
 - Fork distributions use immutable GitHub Release assets, source provenance and SHA-256 checksums. Do not publish the community npm identity or write to the community pi.dev/R2 release service.
 - The community release automation below applies only to the community repository. For this fork, use reviewed PRs and the [fork maintenance runbook](packages/coding-agent/docs/fork-maintenance.md).
 - Existing Pi processes are not hot-upgraded by replacing a launcher. Preserve their installation and do not force-restart active sessions.
 
 ## Documentation map
+
+- [1.3.0-fork.1 synchronization](packages/coding-agent/docs/fork-upgrade-1.3.0-2026-10-17.md): exact community baseline, retained fork protections, exact workspace dependency pins, validation and immutable release/install boundaries.
 
 - [1.2.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.2.0-2026-10-14.md): exact community baseline plus three selected validation fixes, Pi 1.2 package-graph migration, retained fork behavior, immutable release and installed-byte/RPC/rollback acceptance.
 
@@ -65,7 +67,7 @@
 
 ## Dependency and Install Security
 
-- Treat npm dep and lockfile changes as reviewed code. Direct external deps stay pinned to exact versions.
+- Treat npm dep and lockfile changes as reviewed code. Direct registry deps, including internal workspace deps, stay pinned to exact versions.
 - When updating `undici`, you MUST read its changelog/release notes for the target version and evaluate whether any changes may affect functionality before applying the update.
 - Hydrate/update locally with `npm install --ignore-scripts`; clean/CI-style with `npm ci --ignore-scripts`. Don't run lifecycle scripts unless the user asks.
 - If dep metadata changes, refresh `package-lock.json` with `npm install --package-lock-only --ignore-scripts`.
