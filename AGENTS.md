@@ -11,6 +11,8 @@
 
 ## Documentation map
 
+- [Branch protection](packages/coding-agent/docs/fork-branch-protection.md): Owner-approved main PR/Actions checks/history protection, mirror-only fast-forward safeguards, merge-only single-maintainer behavior, rollout and recovery evidence boundaries.
+
 - [1.3.0-fork.1 synchronization](packages/coding-agent/docs/fork-upgrade-1.3.0-2026-10-17.md): exact community baseline, retained fork protections, exact workspace dependency pins, validation and immutable release/install boundaries.
 
 - [1.2.0-fork.1 upgrade](packages/coding-agent/docs/fork-upgrade-1.2.0-2026-10-14.md): exact community baseline plus three selected validation fixes, Pi 1.2 package-graph migration, retained fork behavior, immutable release and installed-byte/RPC/rollback acceptance.

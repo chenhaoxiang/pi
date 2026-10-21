@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-10-17
+updated: 2026-10-21
 ssot: true
 owner: chx
 ---
@@ -18,6 +18,8 @@ owner: chx
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
 - The 10 remaining public workspace packages share `1.3.0-fork.1`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+
+Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
 ## Disconnect recovery
 
