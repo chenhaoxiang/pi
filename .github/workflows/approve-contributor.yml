@@ -6,6 +6,8 @@ on:
 
 jobs:
   approve:
+    # Community contributor admission is not the maintained fork's PR policy.
+    if: github.repository == 'earendil-works/pi'
     runs-on: ubuntu-latest
     permissions:
       contents: write

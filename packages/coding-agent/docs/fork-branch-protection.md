@@ -66,10 +66,17 @@ an actual unconditional PR producer first. A PR that renames or removes either r
 update its required context in the same Owner-approved change; do not leave a permanently missing check. An Actions identity binds the reporter, not semantic
 trust in workflow contents: workflow/release/lock changes still require independent review.
 
-Direct workflow pushes are subject to the same rule. In particular, `approve-contributor.yml`
-currently pushes its approval-file edit directly to main; that push is intentionally rejected after
-rollout. Record approval-file changes through a reviewed PR, not an Actions bypass. This rollout
-does not rewrite or disable that workflow.
+Direct workflow pushes are subject to the same rule. The contributor-admission workflows
+`approve-contributor.yml`, `issue-gate.yml` and `pr-gate.yml` are community-only: their entire jobs
+require the exact repository `earendil-works/pi`. On this maintained fork they skip before checkout,
+approval-file writes, comments or automatic issue/PR closure. Keeping all three together avoids
+closing contributions with an approval command that cannot update protected main.
+
+The community job bodies remain unchanged. Fork contributions use ordinary Owner review and the
+required main checks, not `lgtm`/`lgtmi` admission or an Actions bypass. If the fork's approval file
+needs a separate manual update, use a reviewed PR. `scripts/fork-contributor-workflows.test.mjs`
+checks the exact job guards against community, maintained-fork and unrelated repository contexts.
+This source adaptation does not alter platform protection, credentials or installed runtimes.
 
 Strict freshness can rerun CI after another PR merges. This cost is accepted for the low-volume
 core maintenance line. Merge queue is not configured: the existing CI has no `merge_group`
