@@ -19,6 +19,8 @@ owner: chx
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
 - The 10 remaining public workspace packages share `1.3.0-fork.1`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
+Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
+
 ## Disconnect recovery
 
 Problem: an upstream/proxy may report `stream error: stream disconnected before completion: stream closed before response.completed`. Community 1.0.4 did not classify this as transient, even when automatic retry was enabled.
