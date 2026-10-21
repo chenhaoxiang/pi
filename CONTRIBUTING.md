@@ -2,6 +2,12 @@
 
 This guide exists to save both sides time.
 
+**Maintained fork:** In `chenhaoxiang/pi`, the community contributor-admission workflows
+(`lgtm`/`lgtmi` and automatic issue/PR closure) are skipped. Contributions still require Owner
+review, a normal PR and the protected main checks; see the
+[fork branch-protection contract](packages/coding-agent/docs/fork-branch-protection.md).
+The admission policy described below applies to the community repository `earendil-works/pi`.
+
 ## Philosophy
 
 First things first: **pi's core is minimal**.
