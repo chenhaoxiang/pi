@@ -62,8 +62,14 @@ client compatibility suite. Retain the current workflow content and its model-ca
 Do not require scheduled-only `audit`, contributor eligibility, path-filtered Nix/Environments
 matrices, or community-only publication jobs as universal PR checks. Missing jobs would block
 legitimate PRs; eligibility/publication is not code review. Adding a new required check needs
-an actual unconditional PR producer first. An Actions identity binds the reporter, not semantic
+an actual unconditional PR producer first. A PR that renames or removes either required job must
+update its required context in the same Owner-approved change; do not leave a permanently missing check. An Actions identity binds the reporter, not semantic
 trust in workflow contents: workflow/release/lock changes still require independent review.
+
+Direct workflow pushes are subject to the same rule. In particular, `approve-contributor.yml`
+currently pushes its approval-file edit directly to main; that push is intentionally rejected after
+rollout. Record approval-file changes through a reviewed PR, not an Actions bypass. This rollout
+does not rewrite or disable that workflow.
 
 Strict freshness can rerun CI after another PR merges. This cost is accepted for the low-volume
 core maintenance line. Merge queue is not configured: the existing CI has no `merge_group`
@@ -82,7 +88,9 @@ trigger. Do not enable linear history while ordinary merge commits are required.
    and mirror-only history protections. Creation success is not enforcement proof.
 5. Use this documentation PR as the controlled non-destructive acceptance: observe missing or
    pending required checks block merging, then consume successful results at its exact head
-   and merge normally. Never test protection by force-pushing or deleting real main, and never
+   and merge normally. If the branch becomes behind, merge current main into the topic branch in
+its isolated worktree and push normally; `allow_update_branch` is not changed by this rollout.
+Never test protection by force-pushing or deleting real main, and never
    use `--admin`, fake checks, a failing production change or a permanent bypass to get green.
 6. Read back merged head/merge SHA and the exact main CI, safely refresh canonical main, and
    preserve source-review/CI/configuration evidence before cleaning this task's worktree.
