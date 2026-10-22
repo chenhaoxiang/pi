@@ -67,6 +67,15 @@ jobs:
       - name: Validate model catalog JSON
         run: npm run check:model-catalog
 
+      # A fork checkout does not contain newly published community tags. Fetch only
+      # the release ref needed by the unchanged latest-npm compatibility check.
+      - name: Fetch community release source for fork compatibility
+        if: github.repository == 'chenhaoxiang/pi'
+        run: |
+          version="$(npm view @earendil-works/pi-ai version)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git fetch --no-tags https://github.com/earendil-works/pi.git "refs/tags/v${version}:refs/tags/v${version}"
+
       # pi.dev serves the catalog to released pi >= MINIMUM_PI_VERSION. Fail before
       # publishing if the latest release's code cannot handle it.
       - name: Check the model catalog against the latest release
