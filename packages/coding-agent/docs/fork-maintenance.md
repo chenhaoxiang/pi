@@ -14,7 +14,7 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The prepared `1.4.0-fork.1` source targets exact community tag `v1.4.0`, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`, with retained fork fixes recorded in [the upgrade report](fork-upgrade-1.4.0-2026-10-22.md). Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The current `1.4.0-fork.1` release is based on exact community tag `v1.4.0`, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`, with retained fork fixes recorded in [the upgrade report](fork-upgrade-1.4.0-2026-10-22.md). Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
 - The 10 remaining public workspace packages share `1.4.0-fork.1`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
