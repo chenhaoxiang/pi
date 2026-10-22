@@ -4,12 +4,14 @@
 
 - This repository is `chenhaoxiang/pi`; `earendil-works/pi` remains the community upstream.
 - `main` is the reviewed maintenance branch. `upstream-main` contains only the community tree, with no fork changes. Never force-push either branch or replace maintenance history with the mirror.
-- The current fork release is based on the exact community `v1.3.0` tag. The 10 remaining public workspace packages use lockstep `1.3.0-fork.1` versions. Retain prior fork fixes and immutable release history.
+- The prepared `1.4.0-fork.1` source targets exact community tag `v1.4.0`; release publication and installation are recorded separately. The 10 remaining public workspace packages use lockstep `1.4.0-fork.1` versions. Retain prior fork fixes and immutable release history.
 - Fork distributions use immutable GitHub Release assets, source provenance and SHA-256 checksums. Do not publish the community npm identity or write to the community pi.dev/R2 release service.
 - The community release automation below applies only to the community repository. For this fork, use reviewed PRs and the [fork maintenance runbook](packages/coding-agent/docs/fork-maintenance.md).
 - Existing Pi processes are not hot-upgraded by replacing a launcher. Preserve their installation and do not force-restart active sessions.
 
 ## Documentation map
+
+- [1.4.0-fork.1 synchronization](packages/coding-agent/docs/fork-upgrade-1.4.0-2026-10-22.md): exact stable baseline, overlap resolution, development security patches, extension compatibility and separate release/install evidence.
 
 - [Branch protection](packages/coding-agent/docs/fork-branch-protection.md): Owner-approved main PR/Actions checks/history protection, mirror-only fast-forward safeguards, merge-only single-maintainer behavior, rollout and recovery evidence boundaries.
 
@@ -52,7 +54,7 @@
 - Always ask before removing functionality or code that appears intentional.
 - Do not preserve backward compatibility unless the user asks for it.
 - Never hardcode key checks (e.g. `matchesKey(keyData, "ctrl+x")`). Add defaults to `DEFAULT_EDITOR_KEYBINDINGS` or `DEFAULT_APP_KEYBINDINGS` so they stay configurable.
-- Never modify `packages/ai/src/models.generated.ts` directly; update `packages/ai/scripts/generate-models.ts` instead, then regenerate. Including the resulting `models.generated.ts` diff is always OK, even if regeneration includes unrelated upstream model metadata changes.
+- Never modify `packages/ai/src/models.generated.ts` directly; update `packages/ai/scripts/generate-models.ts` instead, then regenerate. Including the resulting `models.generated.ts` diff is always OK, even if regeneration includes unrelated upstream model metadata changes. The generated model data in `packages/ai/src/providers/data/` is gitignored: never stage it, and don't look for it in git history.
 
 ## Commands
 
