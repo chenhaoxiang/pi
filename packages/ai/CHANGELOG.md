@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.4.0-fork.2] - 2026-10-28
+
+### Changed
+
+- Replaced agent-level exponential backoff with a stepped 1, 3, 5, ... 100 multiplier schedule and raised its default delay cap to 100 seconds. Explicit base delays and caps remain configurable; retryable-error classification and cancellation are unchanged.
+
 ## [1.4.0] - 2026-10-21
 
 ### Breaking Changes

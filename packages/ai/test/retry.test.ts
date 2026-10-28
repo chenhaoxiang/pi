@@ -167,9 +167,22 @@ describe("provider retry classification", () => {
 });
 
 describe("retryDelayMs", () => {
+	it("follows the stepped schedule and stays at 100 seconds through retry 600", () => {
+		const seconds = [1, 3, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 26, 30, 35, 40, 50, 60, 70, 80, 90, 100];
+		const delays = Array.from({ length: 600 }, (_, i) => retryDelayMs({ baseDelayMs: 1000 }, i + 1));
+		expect(delays).toEqual([...seconds, ...Array<number>(578).fill(100)].map((seconds) => seconds * 1000));
+	});
+
+	it("scales the schedule with the configured base delay", () => {
+		expect([1, 2, 3, 22, 600].map((attempt) => retryDelayMs({ baseDelayMs: 10 }, attempt))).toEqual([
+			10, 30, 50, 1000, 1000,
+		]);
+		expect(retryDelayMs({ baseDelayMs: 0 }, 600)).toBe(0);
+	});
+
 	it("caps agent retry delay", () => {
 		// Regression for #8826.
-		expect(retryDelayMs({ baseDelayMs: 2000 }, 6)).toBe(60000);
+		expect(retryDelayMs({ baseDelayMs: 2000 }, 600)).toBe(100000);
 		expect(retryDelayMs({ baseDelayMs: 2000, maxAgentDelayMs: 5000 }, 5)).toBe(5000);
 		expect(retryDelayMs({ baseDelayMs: 2000, maxAgentDelayMs: 0 }, 5)).toBe(0);
 	});

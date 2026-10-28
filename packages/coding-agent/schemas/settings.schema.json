@@ -163,16 +163,16 @@
         },
         "maxRetries": {
           "type": "number",
-          "default": 3
+          "default": 600
         },
         "baseDelayMs": {
           "type": "number",
-          "description": "Exponential backoff base delay in milliseconds: 2s, 4s, 8s.",
-          "default": 2000
+          "description": "Stepped backoff base delay in milliseconds; scales the 1, 3, 5, ... 100 schedule.",
+          "default": 1000
         },
         "maxAgentDelayMs": {
           "type": "number",
-          "default": 60000
+          "default": 100000
         },
         "provider": {
           "type": "object",

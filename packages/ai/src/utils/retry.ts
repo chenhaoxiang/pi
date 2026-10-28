@@ -122,8 +122,8 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 ]);
 
 /**
- * Retry policy: bounded attempts with exponential backoff (`baseDelayMs * 2^(attempt-1)`).
- * `maxAgentDelayMs` caps each computed delay and defaults to 60 seconds.
+ * Retry policy: bounded attempts with stepped backoff (multiples of `baseDelayMs`).
+ * `maxAgentDelayMs` caps each computed delay and defaults to 100 seconds.
  * Matches `settings.retry` (`enabled`, `maxRetries`, `baseDelayMs`, `maxAgentDelayMs`) in coding-agent; kept
  * here so the classifier and the policy-driven retry loop live together and stay reusable
  * by the SDK and other callers.
@@ -132,16 +132,19 @@ export interface RetryPolicy {
 	enabled: boolean;
 	/** Max retry attempts (0 = no retries). The initial call never counts as a retry. */
 	maxRetries: number;
-	/** Base delay in ms. Per-attempt delay is `baseDelayMs * 2^(attempt-1)` before jitter. */
+	/** Base delay in ms, multiplied by the stepped schedule; 1000 uses the schedule in seconds. */
 	baseDelayMs: number;
-	/** Optional cap for agent-level retry delays in ms. Defaults to 60 seconds. */
+	/** Optional cap for agent-level retry delays in ms. Defaults to 100 seconds. */
 	maxAgentDelayMs?: number;
 }
 
-export const DEFAULT_MAX_AGENT_RETRY_DELAY_MS = 60_000;
+export const DEFAULT_MAX_AGENT_RETRY_DELAY_MS = 100_000;
+
+const RETRY_DELAY_MULTIPLIERS = [1, 3, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 26, 30, 35, 40, 50, 60, 70, 80, 90, 100];
 
 export function retryDelayMs(policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">, attempt: number): number {
-	const delay = policy.baseDelayMs * 2 ** Math.max(0, attempt - 1);
+	const index = Math.min(Math.max(0, attempt - 1), RETRY_DELAY_MULTIPLIERS.length - 1);
+	const delay = policy.baseDelayMs * RETRY_DELAY_MULTIPLIERS[index];
 	const safeDelay = Number.isSafeInteger(delay) ? delay : Number.MAX_SAFE_INTEGER;
 	return Math.min(safeDelay, policy.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS);
 }
@@ -195,7 +198,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  *   too, so callers do not need to care when cancellation happened.
  * - A non-retryable error (per {@link isRetryableAssistantError}, including quota/
  *   billing exhaustion) is returned immediately so deterministic errors fail fast.
- * - Otherwise retries up to `maxRetries` times with exponential backoff, emitting
+ * - Otherwise retries up to `maxRetries` times with stepped backoff, emitting
  *   `onRetryScheduled` before each sleep, `onRetryAttemptStart` after each sleep before
  *   the retried call starts, and `onRetryFinished` once at the end (whether the loop
  *   ends in success, exhausted retries, or an aborted backoff).

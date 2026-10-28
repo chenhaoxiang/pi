@@ -57,7 +57,7 @@ const RetrySettingsSchema = Type.Object({
 	maxRetries: Type.Optional(Type.Number({ default: SETTINGS_DEFAULTS.retry.maxRetries })),
 	baseDelayMs: Type.Optional(
 		Type.Number({
-			description: "Exponential backoff base delay in milliseconds: 2s, 4s, 8s.",
+			description: "Stepped backoff base delay in milliseconds; scales the 1, 3, 5, ... 100 schedule.",
 			default: SETTINGS_DEFAULTS.retry.baseDelayMs,
 		}),
 	),
