@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.4.0-fork.2] - 2026-10-28
+
+### Changed
+
+- Raised automatic retry defaults from 3 to 600 attempts, starting at 1 second and following the documented stepped schedule through 100 seconds. Later retries remain at 100 seconds; the initial request does not consume a retry. Explicit settings still override defaults.
+
 ## [1.4.0] - 2026-10-21
 
 ### New Features

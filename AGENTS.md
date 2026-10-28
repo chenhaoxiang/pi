@@ -4,7 +4,7 @@
 
 - This repository is `chenhaoxiang/pi`; `earendil-works/pi` remains the community upstream.
 - `main` is the reviewed maintenance branch. `upstream-main` contains only the community tree, with no fork changes. Never force-push either branch or replace maintenance history with the mirror.
-- The current `1.4.0-fork.1` release is based on exact community tag `v1.4.0`; source, release and installed acceptance are recorded separately in the upgrade report. The 10 remaining public workspace packages use lockstep `1.4.0-fork.1` versions. Retain prior fork fixes and immutable release history.
+- The `1.4.0-fork.2` source is based on exact community tag `v1.4.0`; source, release and installed acceptance are separate. The 10 remaining public workspace packages use lockstep `1.4.0-fork.2` versions. This revision adds 600-attempt stepped retry defaults; see the fork maintenance runbook. Retain prior fork fixes and immutable release history.
 - Fork distributions use immutable GitHub Release assets, source provenance and SHA-256 checksums. Do not publish the community npm identity or write to the community pi.dev/R2 release service.
 - The community release automation below applies only to the community repository. For this fork, use reviewed PRs and the [fork maintenance runbook](packages/coding-agent/docs/fork-maintenance.md).
 - Existing Pi processes are not hot-upgraded by replacing a launcher. Preserve their installation and do not force-restart active sessions.

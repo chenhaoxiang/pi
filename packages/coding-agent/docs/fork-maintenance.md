@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-10-22
+updated: 2026-10-28
 ssot: true
 owner: chx
 ---
@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The current `1.4.0-fork.1` release is based on exact community tag `v1.4.0`, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`, with retained fork fixes recorded in [the upgrade report](fork-upgrade-1.4.0-2026-10-22.md). Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.4.0-fork.2` source retains exact community tag `v1.4.0`, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`, and the fork fixes recorded in [the upgrade report](fork-upgrade-1.4.0-2026-10-22.md). This revision changes the retry defaults below; it does not incorporate later community commits. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 10 remaining public workspace packages share `1.4.0-fork.1`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 10 remaining public workspace packages share `1.4.0-fork.2`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
@@ -25,11 +25,17 @@ Platform protection for the maintenance and mirror refs is specified in [branch 
 
 Problem: an upstream/proxy may report `stream error: stream disconnected before completion: stream closed before response.completed`. Community 1.0.4 did not classify this as transient, even when automatic retry was enabled.
 
-The fork adds only `stream disconnected before completion` and `stream closed before response.completed` wording to the existing classifier. The period in `response.completed` is literal. It retains the existing retry budget/backoff, quota exclusions, cancellation handling and context-overflow handling.
+The fork adds only `stream disconnected before completion` and `stream closed before response.completed` wording to the existing classifier. The period in `response.completed` is literal. It retains quota exclusions, cancellation handling and context-overflow handling; the current retry budget/backoff defaults are described below.
 
 A failed assistant attempt remains in raw history but is omitted from subsequent model projection. Completed tool results remain; partial tool calls in the failed response are not executed. A synthetic session regression verifies these boundaries.
 
 This repairs recovery, not the upstream transport. It does not change provider routing, model limits, compression thresholds or total-request/idle timeouts, and does not prove that 700k-token production requests are reliable.
+
+## Stepped retry defaults (1.4.0-fork.2)
+
+Agent retries default to 600 attempts, excluding the initial request. At the default `baseDelayMs: 1000`, intervals are 1, 3, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 26, 30, 35, 40, 50, 60, 70, 80, 90, then 100 seconds; later intervals stay at 100 seconds. `maxAgentDelayMs` defaults to 100000. The shared helper also applies to compaction and branch-summary retries. Existing explicit settings override defaults; no installation step should silently rewrite provider/model or retry settings. See [settings](settings.md#network-and-retries).
+
+Success, cancellation and non-retryable error handling are unchanged. The complete 600-retry success/exhaustion paths and cancellation during a 100-second sleep are covered by faux-provider tests with virtual time; no paid provider calls are needed. These tests prove local behavior, not upstream availability. Source merge, immutable Release publication, fresh-download checksum validation and installed loading remain separate acceptance steps.
 
 ## Validation
 

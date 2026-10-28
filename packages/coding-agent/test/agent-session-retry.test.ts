@@ -164,7 +164,7 @@ describe("AgentSession retry", () => {
 
 		await created.session.prompt("Test");
 
-		expect(delays).toEqual([1, 2, 4, 5]);
+		expect(delays).toEqual([1, 3, 5, 5]);
 	});
 
 	it("prompt waits for retry completion even when assistant message_end handling is delayed", async () => {
