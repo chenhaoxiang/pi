@@ -42,6 +42,14 @@ const BranchSummarySettingsSchema = Type.Object({
 });
 
 const ProviderRetrySettingsSchema = Type.Object({
+	responseHeadersTimeoutMs: Type.Optional(
+		Type.Number({
+			minimum: 0,
+			description:
+				"Codex pre-response deadline in milliseconds (SSE response headers or WebSocket first event); does not cap model thinking after the transport is acknowledged. Set 0 to disable.",
+			default: SETTINGS_DEFAULTS.retry.provider.responseHeadersTimeoutMs,
+		}),
+	),
 	timeoutMs: Type.Optional(Type.Number({ description: "SDK or provider request timeout in milliseconds." })),
 	maxRetries: Type.Optional(Type.Number({ description: "SDK or provider retry attempts." })),
 	maxRetryDelayMs: Type.Optional(

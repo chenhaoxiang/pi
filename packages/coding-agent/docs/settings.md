@@ -130,6 +130,7 @@ See [Themes](themes.md) and [Terminal Setup](terminal-setup.md) for format and p
 | `retry.baseDelayMs` | number | `1000` | Base delay in milliseconds; scales the stepped retry schedule below. |
 | `retry.maxAgentDelayMs` | number | `100000` | Maximum agent-level retry delay in milliseconds. |
 | `retry.maxConsecutiveSameErrorRetries` | integer | `12` | Stop after this many consecutive equivalent transient errors (the first failed attempt counts); `0` disables the circuit breaker. |
+| `retry.provider.responseHeadersTimeoutMs` | number | `120000` | Codex pre-response deadline in milliseconds (SSE response headers or WebSocket first event). It does not cap model thinking after the transport is acknowledged; set to `0` to disable. |
 | `retry.provider.timeoutMs` | number | `httpIdleTimeoutMs` | Provider request timeout in milliseconds. |
 | `retry.provider.maxRetries` | number | `0` | Provider-level retry attempts. |
 | `retry.provider.maxRetryDelayMs` | number | `60000` | Maximum server-requested delay in milliseconds. Set to `0` to disable the limit. |

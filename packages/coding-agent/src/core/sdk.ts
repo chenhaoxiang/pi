@@ -17,6 +17,7 @@ import { ModelRuntime } from "./model-runtime.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
 import { getDefaultSessionDir, SessionManager } from "./session-manager.ts";
+import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import {
 	applyToolModifiers,
 	DEFAULT_TOOL_NAMES,
@@ -345,6 +346,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		return {
 			...options,
 			timeoutMs: options.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs,
+			responseHeadersTimeoutMs:
+				options.responseHeadersTimeoutMs ??
+				(options.timeoutMs !== undefined
+					? options.timeoutMs
+					: (providerRetrySettings.responseHeadersTimeoutMs ??
+						SETTINGS_DEFAULTS.retry.provider.responseHeadersTimeoutMs)),
 			websocketConnectTimeoutMs: options.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs(),
 			maxRetries: options.maxRetries ?? providerRetrySettings.maxRetries,
 			maxRetryDelayMs: options.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,

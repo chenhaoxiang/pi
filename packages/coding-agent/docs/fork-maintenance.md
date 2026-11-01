@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-10-28
+updated: 2026-11-01
 ssot: true
 owner: chx
 ---
@@ -30,6 +30,10 @@ The fork adds only `stream disconnected before completion` and `stream closed be
 A failed assistant attempt remains in raw history but is omitted from subsequent model projection. Completed tool results remain; partial tool calls in the failed response are not executed. A synthetic session regression verifies these boundaries.
 
 This repairs recovery, not the upstream transport. It does not change provider routing, model limits, compression thresholds or total-request/idle timeouts, and does not prove that 700k-token production requests are reliable.
+
+## Codex response phase guard
+
+Codex requests now use a separate pre-response deadline, defaulting to 120 seconds: SSE waits for response headers, while WebSocket waits for its first protocol event. This bounds a request stuck before the provider acknowledges it without applying a total runtime limit after that acknowledgement, so long model thinking remains valid. The existing agent-level automatic retry budget and stepped backoff are unchanged; timeout errors remain transient retry candidates and include redacted phase timing diagnostics (`waiting_response_headers`, `waiting_first_event`, or `streaming`). Set `retry.provider.responseHeadersTimeoutMs` to `0` only when a route deliberately needs an unbounded pre-response wait.
 
 ## Stepped retry defaults (1.4.0-fork.2)
 

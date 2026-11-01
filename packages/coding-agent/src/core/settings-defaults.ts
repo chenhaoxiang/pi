@@ -25,6 +25,7 @@ export const SETTINGS_DEFAULTS = {
 		maxAgentDelayMs: DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
 		maxConsecutiveSameErrorRetries: DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES,
 		provider: {
+			responseHeadersTimeoutMs: 120000,
 			maxRetryDelayMs: 60000,
 		},
 	},
