@@ -27,6 +27,7 @@ describe("regression #7572: nested provider retry settings merge", () => {
 		const settingsManager = SettingsManager.fromStorage(storage);
 
 		expect(settingsManager.getProviderRetrySettings()).toEqual({
+			responseHeadersTimeoutMs: 120000,
 			timeoutMs: 30000,
 			maxRetries: 2,
 			maxRetryDelayMs: 45000,

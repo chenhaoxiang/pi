@@ -946,8 +946,16 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getProviderRetrySettings(): { timeoutMs?: number; maxRetries?: number; maxRetryDelayMs: number } {
+	getProviderRetrySettings(): {
+		responseHeadersTimeoutMs?: number;
+		timeoutMs?: number;
+		maxRetries?: number;
+		maxRetryDelayMs: number;
+	} {
 		return {
+			responseHeadersTimeoutMs:
+				this.settings.retry?.provider?.responseHeadersTimeoutMs ??
+				SETTINGS_DEFAULTS.retry.provider.responseHeadersTimeoutMs,
 			timeoutMs: this.settings.retry?.provider?.timeoutMs,
 			maxRetries: this.settings.retry?.provider?.maxRetries,
 			maxRetryDelayMs:

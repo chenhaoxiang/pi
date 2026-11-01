@@ -59,6 +59,10 @@ const DEFAULT_MAX_RETRIES = 0;
 const BASE_DELAY_MS = 1000;
 const DEFAULT_MAX_RETRY_DELAY_MS = 60_000;
 const DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS = 15_000;
+// A disabled HTTP idle timeout must not also disable the pre-response guard:
+// once SSE headers or a WebSocket first event arrive, model thinking remains unbounded by this value.
+const DEFAULT_CODEX_RESPONSE_HEADERS_TIMEOUT_MS = 120_000;
+const NO_TIMEOUT_SENTINEL_MS = 2_147_483_647;
 // The Codex backend accepts zstd-compressed request bodies on the SSE responses
 // endpoint (the same endpoint the official Codex client compresses against).
 const REQUEST_COMPRESSION_ZSTD_LEVEL = 3;
@@ -89,6 +93,21 @@ export interface OpenAICodexResponsesOptions extends StreamOptions {
 }
 
 type CodexResponseStatus = "completed" | "incomplete" | "failed" | "cancelled" | "queued" | "in_progress";
+
+type CodexTransport = "websocket" | "sse";
+
+type CodexRequestPhase = "connecting" | "waiting_response_headers" | "waiting_first_event" | "streaming";
+
+interface CodexRequestTiming {
+	transport: CodexTransport;
+	startedAt: number;
+	transportReadyAt?: number;
+	responseHeadersAt?: number;
+	firstStreamEventAt?: number;
+	lastStreamEventAt?: number;
+	firstBodyByteAt?: number;
+	lastBodyByteAt?: number;
+}
 
 interface RequestBody {
 	model: string;
@@ -201,6 +220,45 @@ function normalizeTimeoutMs(value: number | undefined): number | undefined {
 	return Math.floor(value);
 }
 
+function normalizeCodexStreamIdleTimeoutMs(value: number | undefined): number | undefined {
+	const normalized = normalizeTimeoutMs(value);
+	return normalized === NO_TIMEOUT_SENTINEL_MS ? undefined : normalized;
+}
+
+function resolveCodexResponseHeadersTimeoutMs(options?: OpenAICodexResponsesOptions): number | undefined {
+	const explicit = normalizeTimeoutMs(options?.responseHeadersTimeoutMs);
+	if (explicit !== undefined) return explicit;
+	const legacy = normalizeTimeoutMs(options?.timeoutMs);
+	if (legacy !== undefined && legacy !== NO_TIMEOUT_SENTINEL_MS) return legacy;
+	return DEFAULT_CODEX_RESPONSE_HEADERS_TIMEOUT_MS;
+}
+
+function codexRequestPhase(timing: CodexRequestTiming): CodexRequestPhase {
+	if (timing.transport === "websocket" && !timing.transportReadyAt) return "connecting";
+	if (timing.transport === "sse" && !timing.responseHeadersAt) return "waiting_response_headers";
+	if (!timing.firstStreamEventAt) return "waiting_first_event";
+	return "streaming";
+}
+
+function codexTimingDetails(timing: CodexRequestTiming): Record<string, string | number> {
+	const now = Date.now();
+	return {
+		transport: timing.transport,
+		phase: codexRequestPhase(timing),
+		elapsedMs: Math.max(0, now - timing.startedAt),
+		...(timing.transportReadyAt ? { transportReadyMs: Math.max(0, timing.transportReadyAt - timing.startedAt) } : {}),
+		...(timing.responseHeadersAt
+			? { responseHeadersMs: Math.max(0, timing.responseHeadersAt - timing.startedAt) }
+			: {}),
+		...(timing.firstStreamEventAt
+			? { firstStreamEventMs: Math.max(0, timing.firstStreamEventAt - timing.startedAt) }
+			: {}),
+		...(timing.lastStreamEventAt ? { streamIdleMs: Math.max(0, now - timing.lastStreamEventAt) } : {}),
+		...(timing.firstBodyByteAt ? { firstBodyByteMs: Math.max(0, timing.firstBodyByteAt - timing.startedAt) } : {}),
+		...(timing.lastBodyByteAt ? { bodyIdleMs: Math.max(0, now - timing.lastBodyByteAt) } : {}),
+	};
+}
+
 // ============================================================================
 // Request Compression
 // ============================================================================
@@ -265,6 +323,11 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			stopReason: "pending",
 			timestamp: Date.now(),
 		};
+		const timing: CodexRequestTiming = {
+			transport: options?.transport === "sse" ? "sse" : "websocket",
+			startedAt: Date.now(),
+		};
+		let responseHeadersTimeoutMs: number | undefined;
 
 		try {
 			const apiKey = options?.apiKey;
@@ -304,9 +367,21 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				websocketRequestId,
 			);
 			const bodyJson = JSON.stringify(body);
-			const httpTimeoutMs = normalizeTimeoutMs(options?.timeoutMs);
+			const httpTimeoutMs = normalizeCodexStreamIdleTimeoutMs(options?.timeoutMs);
+			responseHeadersTimeoutMs = resolveCodexResponseHeadersTimeoutMs(options);
 			const websocketConnectTimeoutMs = normalizeTimeoutMs(options?.websocketConnectTimeoutMs);
 			const transport = options?.transport || "auto";
+			timing.transport = transport === "sse" ? "sse" : "websocket";
+			const markProviderEvent = () => {
+				const now = Date.now();
+				timing.firstStreamEventAt ??= now;
+				timing.lastStreamEventAt = now;
+			};
+			const markBodyChunk = () => {
+				const now = Date.now();
+				timing.firstBodyByteAt ??= now;
+				timing.lastBodyByteAt = now;
+			};
 			let startEmitted = false;
 			const websocketDisabledForSession = transport !== "sse" && isWebSocketSseFallbackActive(cacheSessionId);
 			if (websocketDisabledForSession) {
@@ -328,13 +403,18 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 							stream,
 							model,
 							() => {
+								timing.transportReadyAt ??= Date.now();
+							},
+							() => {
 								websocketStarted = true;
 								if (!startEmitted) {
 									startEmitted = true;
 									stream.push({ type: "start", partial: output });
 								}
 							},
+							markProviderEvent,
 							httpTimeoutMs,
+							responseHeadersTimeoutMs,
 							websocketConnectTimeoutMs,
 							cacheSessionId,
 							accountId,
@@ -388,6 +468,8 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				}
 			}
 
+			timing.transport = "sse";
+
 			// Compress the request body once for the SSE path. The Codex backend
 			// decodes Content-Encoding: zstd; the WebSocket transport above sends the
 			// uncompressed JSON frame, matching the official Codex client.
@@ -409,7 +491,9 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 
 				try {
 					const headerTimeoutSignal =
-						httpTimeoutMs !== undefined && httpTimeoutMs > 0 ? AbortSignal.timeout(httpTimeoutMs) : undefined;
+						responseHeadersTimeoutMs !== undefined && responseHeadersTimeoutMs > 0
+							? AbortSignal.timeout(responseHeadersTimeoutMs)
+							: undefined;
 					const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
 					try {
 						response = await (options?.fetch ?? globalThis.fetch)(resolveCodexUrl(model.baseUrl), {
@@ -420,12 +504,13 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 						});
 					} catch (error) {
 						if (headerTimeoutSignal?.aborted && !options?.signal?.aborted) {
-							throw new Error(`Codex SSE response headers timed out after ${httpTimeoutMs}ms`);
+							throw new Error(`Codex SSE response headers timed out after ${responseHeadersTimeoutMs}ms`);
 						}
 						throw error;
 					} finally {
 						combinedSignal.cleanup();
 					}
+					timing.responseHeadersAt ??= Date.now();
 					await options?.onResponse?.(
 						{ status: response.status, headers: headersToRecord(response.headers) },
 						model,
@@ -487,7 +572,16 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				startEmitted = true;
 				stream.push({ type: "start", partial: output });
 			}
-			await processStream(response, output, stream, model, grammarToolInputProperties, options);
+			await processStream(
+				response,
+				output,
+				stream,
+				model,
+				grammarToolInputProperties,
+				options,
+				markProviderEvent,
+				markBodyChunk,
+			);
 
 			if (options?.signal?.aborted) {
 				throw new Error("Request was aborted");
@@ -497,6 +591,13 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			stream.push({ type: "done", reason: output.stopReason, message: output });
 			stream.end();
 		} catch (error) {
+			appendAssistantMessageDiagnostic(
+				output,
+				createAssistantMessageDiagnostic("provider_request_timing", error, {
+					...codexTimingDetails(timing),
+					responseHeadersTimeoutMs: responseHeadersTimeoutMs ?? null,
+				}),
+			);
 			for (const block of output.content) {
 				// Streaming scratch buffers are only used during parsing; never persist them.
 				delete (block as { partialJson?: string }).partialJson;
@@ -685,10 +786,20 @@ async function processStream(
 	stream: AssistantMessageEventStream,
 	model: Model<"openai-codex-responses">,
 	grammarToolInputProperties: ReadonlyMap<string, string>,
-	options?: OpenAICodexResponsesOptions,
+	options: OpenAICodexResponsesOptions | undefined,
+	markProviderEvent: () => void,
+	markBodyChunk: () => void,
 ): Promise<void> {
 	await processResponsesStream(
-		mapCodexEvents(parseSSE(response, options?.signal), output, model, options?.onProviderStreamEvent),
+		mapCodexEvents(
+			parseSSE(response, options?.signal, normalizeCodexStreamIdleTimeoutMs(options?.timeoutMs), markBodyChunk),
+			output,
+			model,
+			async (event, eventModel) => {
+				markProviderEvent();
+				await options?.onProviderStreamEvent?.(event, eventModel);
+			},
+		),
 		output,
 		stream,
 		model,
@@ -818,7 +929,43 @@ function normalizeCodexStatus(status: unknown): CodexResponseStatus | undefined 
 // SSE Parsing
 // ============================================================================
 
-async function* parseSSE(response: Response, signal?: AbortSignal): AsyncGenerator<Record<string, unknown>> {
+type SseReadResult = { done: boolean; value?: Uint8Array };
+
+async function readSSEChunk(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+	timeoutMs: number | undefined,
+): Promise<SseReadResult> {
+	if (timeoutMs === undefined || timeoutMs <= 0) return reader.read();
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		const timer = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			reject(new Error(`Codex SSE stream idle timeout after ${timeoutMs}ms`));
+		}, timeoutMs);
+		reader.read().then(
+			(result) => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timer);
+				resolve(result);
+			},
+			(error) => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
+
+async function* parseSSE(
+	response: Response,
+	signal?: AbortSignal,
+	idleTimeoutMs?: number,
+	onBodyChunk?: () => void,
+): AsyncGenerator<Record<string, unknown>> {
 	if (!response.body) return;
 
 	const reader = response.body.getReader();
@@ -834,7 +981,8 @@ async function* parseSSE(response: Response, signal?: AbortSignal): AsyncGenerat
 			if (signal?.aborted) {
 				throw new Error("Request was aborted");
 			}
-			const { done, value } = await reader.read();
+			const { done, value } = await readSSEChunk(reader, idleTimeoutMs);
+			if (!done && value?.byteLength) onBodyChunk?.();
 			if (signal?.aborted) {
 				throw new Error("Request was aborted");
 			}
@@ -1330,12 +1478,14 @@ async function* parseWebSocket(
 	socket: WebSocketLike,
 	signal?: AbortSignal,
 	idleTimeoutMs?: number,
+	initialEventTimeoutMs?: number,
 ): AsyncGenerator<Record<string, unknown>> {
 	const queue: Record<string, unknown>[] = [];
 	let pending: (() => void) | null = null;
 	let done = false;
 	let failed: Error | null = null;
 	let sawCompletion = false;
+	let sawMessage = false;
 
 	const wake = () => {
 		if (!pending) return;
@@ -1353,6 +1503,7 @@ async function* parseWebSocket(
 				if (!text) return;
 				const parsed = JSON.parse(text) as Record<string, unknown>;
 				const type = typeof parsed.type === "string" ? parsed.type : "";
+				sawMessage = true;
 				if (type === "response.completed" || type === "response.done" || type === "response.incomplete") {
 					sawCompletion = true;
 					done = true;
@@ -1413,9 +1564,14 @@ async function* parseWebSocket(
 			let timeout: ReturnType<typeof setTimeout> | undefined;
 			await new Promise<void>((resolve, reject) => {
 				pending = resolve;
-				if (idleTimeoutMs !== undefined && idleTimeoutMs > 0) {
+				const waitTimeoutMs = sawMessage ? idleTimeoutMs : initialEventTimeoutMs;
+				if (waitTimeoutMs !== undefined && waitTimeoutMs > 0) {
 					timeout = setTimeout(() => {
-						const error = new Error(`WebSocket idle timeout after ${idleTimeoutMs}ms`);
+						const error = new Error(
+							sawMessage
+								? `WebSocket idle timeout after ${waitTimeoutMs}ms`
+								: `WebSocket first event timeout after ${waitTimeoutMs}ms`,
+						);
 						failed = error;
 						done = true;
 						pending = null;
@@ -1519,8 +1675,11 @@ async function processWebSocketStream(
 	output: AssistantMessage,
 	stream: AssistantMessageEventStream,
 	model: Model<"openai-codex-responses">,
+	onTransportReady: () => void,
 	onStart: () => void,
+	markProviderEvent: () => void,
 	idleTimeoutMs: number | undefined,
+	initialEventTimeoutMs: number | undefined,
 	websocketConnectTimeoutMs: number | undefined,
 	cacheSessionId: string | undefined,
 	accountId: string,
@@ -1536,6 +1695,7 @@ async function processWebSocketStream(
 		websocketConnectTimeoutMs,
 		options?.env,
 	);
+	onTransportReady();
 	let keepConnection = true;
 	const useCachedContext = options?.transport === "websocket-cached" || options?.transport === "auto";
 	// ChatGPT Codex Responses rejects `store: true` ("Store must be set to false").
@@ -1565,10 +1725,13 @@ async function processWebSocketStream(
 		await processResponsesStream(
 			startWebSocketOutputOnFirstEvent(
 				mapCodexEvents(
-					parseWebSocket(socket, options?.signal, idleTimeoutMs),
+					parseWebSocket(socket, options?.signal, idleTimeoutMs, initialEventTimeoutMs),
 					output,
 					model,
-					options?.onProviderStreamEvent,
+					async (event, eventModel) => {
+						markProviderEvent();
+						await options?.onProviderStreamEvent?.(event, eventModel);
+					},
 				),
 				onStart,
 			),

@@ -203,6 +203,12 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
 	 */
 	timeoutMs?: number;
 	/**
+	 * Optional timeout for the response headers phase. Codex uses this to bound a
+	 * request that never reaches the provider response without bounding model
+	 * thinking after headers have arrived.
+	 */
+	responseHeadersTimeoutMs?: number;
+	/**
 	 * Maximum retry attempts for providers/SDKs that support client-side retries.
 	 * For example, OpenAI and Anthropic SDK clients default to 2.
 	 */

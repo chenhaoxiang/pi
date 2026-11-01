@@ -436,6 +436,68 @@ describe("openai-codex streaming", () => {
 		expect(result.errorMessage).toBe("Codex SSE response headers timed out after 10ms");
 	});
 
+	it("bounds the SSE response-headers phase independently from model thinking", async () => {
+		const token = mockToken();
+		const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+			const signal = init?.signal;
+			if (!signal) throw new Error("Expected SSE fetch to receive an abort signal");
+			return new Promise<Response>((_, reject) => {
+				const onAbort = () => reject(new Error("fetch aborted"));
+				if (signal.aborted) onAbort();
+				else signal.addEventListener("abort", onAbort, { once: true });
+			});
+		});
+		const model: Model<"openai-codex-responses"> = {
+			id: "gpt-5.1-codex",
+			name: "GPT-5.1 Codex",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		};
+		const context = normalizeContext({
+			messages: [{ role: "user", content: "Say hello", timestamp: Date.now() }],
+		});
+		const timedOut = await streamOpenAICodexResponses(model, context, {
+			apiKey: token,
+			transport: "sse",
+			timeoutMs: 0,
+			responseHeadersTimeoutMs: 10,
+			fetch: fetchMock,
+		}).result();
+
+		expect(timedOut.stopReason).toBe("error");
+		expect(timedOut.errorMessage).toBe("Codex SSE response headers timed out after 10ms");
+		expect(timedOut.diagnostics?.at(-1)).toMatchObject({
+			type: "provider_request_timing",
+			details: { phase: "waiting_response_headers", responseHeadersTimeoutMs: 10 },
+		});
+
+		const encoder = new TextEncoder();
+		const delayedBody = new ReadableStream<Uint8Array>({
+			start(controller) {
+				setTimeout(() => {
+					controller.enqueue(encoder.encode(buildSSEPayload({ status: "completed" })));
+					controller.close();
+				}, 30);
+			},
+		});
+		const completed = await streamOpenAICodexResponses(model, context, {
+			apiKey: token,
+			transport: "sse",
+			timeoutMs: 0,
+			responseHeadersTimeoutMs: 10,
+			fetch: async () =>
+				new Response(delayedBody, { status: 200, headers: { "content-type": "text/event-stream" } }),
+		}).result();
+
+		expect(completed.stopReason).toBe("stop");
+	});
+
 	it("aborts SSE body reads after response headers arrive", async () => {
 		const token = mockToken();
 		const encoder = new TextEncoder();
@@ -1885,7 +1947,8 @@ describe("openai-codex streaming", () => {
 			apiKey: token,
 			sessionId: "ws-idle-before-start",
 			transport: "auto",
-			timeoutMs: 50,
+			timeoutMs: 0,
+			responseHeadersTimeoutMs: 50,
 		}).result();
 
 		await vi.advanceTimersByTimeAsync(0);

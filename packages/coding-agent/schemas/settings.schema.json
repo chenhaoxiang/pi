@@ -184,6 +184,12 @@
         "provider": {
           "type": "object",
           "properties": {
+            "responseHeadersTimeoutMs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Codex pre-response deadline in milliseconds (SSE response headers or WebSocket first event); does not cap model thinking after the transport is acknowledged. Set 0 to disable.",
+              "default": 120000
+            },
             "timeoutMs": {
               "type": "number",
               "description": "SDK or provider request timeout in milliseconds."
