@@ -15,49 +15,76 @@ describe("fork default retry backoff", () => {
 		vi.useRealTimers();
 	});
 
-	it.each(["stop", "error"] as const)("allows exactly 600 retries ending in %s", async (stopReason) => {
-		harness = await createHarness();
-		harness.setResponses([
-			...Array.from({ length: 600 }, () =>
-				fauxAssistantMessage("", { stopReason: "error", errorMessage: overloadError }),
-			),
-			fauxAssistantMessage("done", {
-				stopReason,
-				...(stopReason === "error" ? { errorMessage: overloadError } : {}),
-			}),
-		]);
-		vi.useFakeTimers();
-		const firstRetry = new Promise<void>((resolve) => {
-			harness!.session.subscribe((event) => {
-				if (event.type === "auto_retry_start" && event.attempt === 1) resolve();
+	it.each(["stop", "error"] as const)(
+		"allows exactly 600 retries when the circuit breaker is disabled, ending in %s",
+		async (stopReason) => {
+			harness = await createHarness({ settings: { retry: { maxConsecutiveSameErrorRetries: 0 } } });
+			harness.setResponses([
+				...Array.from({ length: 600 }, () =>
+					fauxAssistantMessage("", { stopReason: "error", errorMessage: overloadError }),
+				),
+				fauxAssistantMessage("done", {
+					stopReason,
+					...(stopReason === "error" ? { errorMessage: overloadError } : {}),
+				}),
+			]);
+			vi.useFakeTimers();
+			const firstRetry = new Promise<void>((resolve) => {
+				harness!.session.subscribe((event) => {
+					if (event.type === "auto_retry_start" && event.attempt === 1) resolve();
+				});
 			});
-		});
 
+			const prompt = harness.session.prompt("test");
+			await firstRetry;
+			await vi.runAllTimersAsync();
+			await prompt;
+
+			const retries = harness.eventsOfType("auto_retry_start");
+			expect(retries).toHaveLength(600);
+			expect(retries.every((event, i) => event.attempt === i + 1 && event.maxAttempts === 600)).toBe(true);
+			expect(retries.map((event) => event.delayMs)).toEqual(
+				[...retrySeconds, ...Array<number>(578).fill(100)].map((seconds) => seconds * 1000),
+			);
+			expect(harness.faux.state.callCount).toBe(601);
+			expect(harness.session.isRetrying).toBe(false);
+			expect(harness.eventsOfType("auto_retry_end")).toEqual([
+				{
+					type: "auto_retry_end",
+					success: stopReason === "stop",
+					attempt: 600,
+					...(stopReason === "error" ? { finalError: overloadError } : {}),
+				},
+			]);
+		},
+	);
+
+	it("opens the default circuit after repeated equivalent transient errors", async () => {
+		harness = await createHarness();
+		harness.setResponses(
+			Array.from({ length: 20 }, (_, index) =>
+				fauxAssistantMessage("", {
+					stopReason: "error",
+					errorMessage: `${overloadError} request_id=req_${index}`,
+				}),
+			),
+		);
+		vi.useFakeTimers();
 		const prompt = harness.session.prompt("test");
-		await firstRetry;
 		await vi.runAllTimersAsync();
 		await prompt;
 
 		const retries = harness.eventsOfType("auto_retry_start");
-		expect(retries).toHaveLength(600);
-		expect(retries.every((event, i) => event.attempt === i + 1 && event.maxAttempts === 600)).toBe(true);
-		expect(retries.map((event) => event.delayMs)).toEqual(
-			[...retrySeconds, ...Array<number>(578).fill(100)].map((seconds) => seconds * 1000),
-		);
-		expect(harness.faux.state.callCount).toBe(601);
-		expect(harness.session.isRetrying).toBe(false);
+		expect(retries).toHaveLength(11);
+		expect(retries.at(-1)).toMatchObject({ attempt: 11, maxAttempts: 600 });
+		expect(harness.faux.state.callCount).toBe(12);
 		expect(harness.eventsOfType("auto_retry_end")).toEqual([
-			{
-				type: "auto_retry_end",
-				success: stopReason === "stop",
-				attempt: 600,
-				...(stopReason === "error" ? { finalError: overloadError } : {}),
-			},
+			{ type: "auto_retry_end", success: false, attempt: 11, finalError: expect.any(String) },
 		]);
 	});
 
 	it("can cancel during a 100-second retry sleep", async () => {
-		harness = await createHarness();
+		harness = await createHarness({ settings: { retry: { maxConsecutiveSameErrorRetries: 0 } } });
 		harness.setResponses(
 			Array.from({ length: 22 }, () =>
 				fauxAssistantMessage("", { stopReason: "error", errorMessage: overloadError }),

@@ -124,7 +124,10 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 /**
  * Retry policy: bounded attempts with stepped backoff (multiples of `baseDelayMs`).
  * `maxAgentDelayMs` caps each computed delay and defaults to 100 seconds.
- * Matches `settings.retry` (`enabled`, `maxRetries`, `baseDelayMs`, `maxAgentDelayMs`) in coding-agent; kept
+ * A consecutive-error circuit breaker stops a retry loop when the same transient failure keeps
+ * repeating, even if the broader retry budget is larger.
+ * Matches `settings.retry` (`enabled`, `maxRetries`, `baseDelayMs`, `maxAgentDelayMs`,
+ * `maxConsecutiveSameErrorRetries`) in coding-agent; kept
  * here so the classifier and the policy-driven retry loop live together and stay reusable
  * by the SDK and other callers.
  */
@@ -136,9 +139,13 @@ export interface RetryPolicy {
 	baseDelayMs: number;
 	/** Optional cap for agent-level retry delays in ms. Defaults to 100 seconds. */
 	maxAgentDelayMs?: number;
+	/** Optional consecutive equivalent transient-error limit. `0` disables the circuit breaker. */
+	maxConsecutiveSameErrorRetries?: number;
 }
 
 export const DEFAULT_MAX_AGENT_RETRY_DELAY_MS = 100_000;
+/** Stop after this many consecutive equivalent transient errors, before the large retry budget spins. */
+export const DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES = 12;
 
 const RETRY_DELAY_MULTIPLIERS = [1, 3, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 26, 30, 35, 40, 50, 60, 70, 80, 90, 100];
 
@@ -147,6 +154,20 @@ export function retryDelayMs(policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgent
 	const delay = policy.baseDelayMs * RETRY_DELAY_MULTIPLIERS[index];
 	const safeDelay = Number.isSafeInteger(delay) ? delay : Number.MAX_SAFE_INTEGER;
 	return Math.min(safeDelay, policy.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS);
+}
+
+/**
+ * Build a stable comparison key for repeated provider failures without preserving volatile request ids.
+ * This is deliberately narrow: it does not classify errors or turn different failure messages into
+ * one bucket; it only removes common request-id spellings and collapses whitespace.
+ */
+export function retryErrorFingerprint(errorMessage: string): string {
+	return errorMessage
+		.trim()
+		.toLowerCase()
+		.replace(/\b(?:request[ _-]?id)\s*[:=]\s*[a-z0-9._-]+\b/gi, "request-id:<request-id>")
+		.replace(/\breq_[a-z0-9_-]+\b/gi, "<request-id>")
+		.replace(/\s+/g, " ");
 }
 
 /** Optional callbacks emitted by {@link retryAssistantCall} around each retry. */
@@ -198,10 +219,11 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  *   too, so callers do not need to care when cancellation happened.
  * - A non-retryable error (per {@link isRetryableAssistantError}, including quota/
  *   billing exhaustion) is returned immediately so deterministic errors fail fast.
- * - Otherwise retries up to `maxRetries` times with stepped backoff, emitting
- *   `onRetryScheduled` before each sleep, `onRetryAttemptStart` after each sleep before
- *   the retried call starts, and `onRetryFinished` once at the end (whether the loop
- *   ends in success, exhausted retries, or an aborted backoff).
+ * - Otherwise retries up to `maxRetries` times with stepped backoff, stopping earlier when the same
+ *   transient error reaches `maxConsecutiveSameErrorRetries` (default 12), emitting `onRetryScheduled`
+ *   before each sleep, `onRetryAttemptStart` after each sleep before the retried call starts, and
+ *   `onRetryFinished` once at the end (whether the loop ends in success, exhausted retries, a
+ *   repeated-error circuit break, or an aborted backoff).
  *
  * When `policy` is undefined or disabled, the first response is returned unchanged
  * (equivalent to calling `produce()` directly).
@@ -214,8 +236,12 @@ export async function retryAssistantCall(
 ): Promise<AssistantMessage> {
 	const maxAttempts = policy?.enabled ? policy.maxRetries : 0;
 
+	const maxConsecutiveSameErrorRetries =
+		policy?.maxConsecutiveSameErrorRetries ?? DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES;
 	let attempt = 0;
 	let lastRetry: { attempt: number; errorMessage: string } | undefined;
+	let lastErrorFingerprint: string | undefined;
+	let consecutiveSameErrorCount = 0;
 	for (;;) {
 		const response = await produce();
 
@@ -231,8 +257,15 @@ export async function retryAssistantCall(
 			return response;
 		}
 
-		// Non-retryable, or budget exhausted: return the final error message.
-		if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {
+		const retryable = isRetryableAssistantError(response);
+		const fingerprint = retryErrorFingerprint(response.errorMessage || "Unknown error");
+		consecutiveSameErrorCount = fingerprint === lastErrorFingerprint ? consecutiveSameErrorCount + 1 : 1;
+		lastErrorFingerprint = fingerprint;
+		const circuitOpen =
+			retryable && maxConsecutiveSameErrorRetries > 0 && consecutiveSameErrorCount >= maxConsecutiveSameErrorRetries;
+
+		// Non-retryable, budget exhausted, or a repeated transient failure: return the final error.
+		if (attempt >= maxAttempts || !retryable || circuitOpen) {
 			if (lastRetry) await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);
 			return response;
 		}

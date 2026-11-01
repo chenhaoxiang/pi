@@ -31,7 +31,13 @@ import {
 	runToolCall,
 	type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import { contentText, getCurrentSystemMessage, getCurrentTools, retryDelayMs } from "@earendil-works/pi-ai";
+import {
+	contentText,
+	getCurrentSystemMessage,
+	getCurrentTools,
+	retryDelayMs,
+	retryErrorFingerprint,
+} from "@earendil-works/pi-ai";
 import type {
 	AssistantMessage,
 	AuthResult,
@@ -411,6 +417,8 @@ export class AgentSession {
 	// Retry state
 	private _retryAbortController: AbortController | undefined = undefined;
 	private _retryAttempt = 0;
+	private _retryErrorFingerprint: string | undefined;
+	private _consecutiveRetryErrorCount = 0;
 	/**
 	 * Failed response that the next request repeats, set by auto-retry and overflow recovery. The
 	 * retry is routed with it as `failed`, since the context no longer contains it.
@@ -1174,15 +1182,19 @@ export class AgentSession {
 					this._overflowRecoveryAttempted = false;
 				}
 
-				// Reset retry counter immediately on successful assistant response
-				// This prevents accumulation across multiple LLM calls within a turn
-				if (assistantMsg.stopReason !== "error" && this._retryAttempt > 0) {
-					this._emit({
-						type: "auto_retry_end",
-						success: true,
-						attempt: this._retryAttempt,
-					});
+				// Reset retry state immediately on successful assistant response. This prevents
+				// accumulation across multiple LLM calls within a turn and clears the circuit breaker.
+				if (assistantMsg.stopReason !== "error") {
+					if (this._retryAttempt > 0) {
+						this._emit({
+							type: "auto_retry_end",
+							success: true,
+							attempt: this._retryAttempt,
+						});
+					}
 					this._retryAttempt = 0;
+					this._retryErrorFingerprint = undefined;
+					this._consecutiveRetryErrorCount = 0;
 				}
 			}
 		}
@@ -1207,10 +1219,28 @@ export class AgentSession {
 		for (let i = event.messages.length - 1; i >= 0; i--) {
 			const message = event.messages[i];
 			if (message.role === "assistant") {
-				return this._isRetryableError(message as AssistantMessage);
+				const assistantMessage = message as AssistantMessage;
+				return (
+					this._isRetryableError(assistantMessage) &&
+					!this._wouldOpenRetryCircuit(assistantMessage, settings.maxConsecutiveSameErrorRetries)
+				);
 			}
 		}
 		return false;
+	}
+
+	private _wouldOpenRetryCircuit(message: AssistantMessage, limit: number): boolean {
+		if (limit <= 0) return false;
+		const fingerprint = retryErrorFingerprint(message.errorMessage || "Unknown error");
+		const nextCount = fingerprint === this._retryErrorFingerprint ? this._consecutiveRetryErrorCount + 1 : 1;
+		return nextCount >= limit;
+	}
+
+	private _recordRetryError(message: AssistantMessage): void {
+		const fingerprint = retryErrorFingerprint(message.errorMessage || "Unknown error");
+		this._consecutiveRetryErrorCount =
+			fingerprint === this._retryErrorFingerprint ? this._consecutiveRetryErrorCount + 1 : 1;
+		this._retryErrorFingerprint = fingerprint;
 	}
 
 	private _findPersistedMessageEntryId(message: AgentMessage): string | undefined {
@@ -2003,6 +2033,8 @@ export class AgentSession {
 				finalError: message.errorMessage,
 			});
 			this._retryAttempt = 0;
+			this._retryErrorFingerprint = undefined;
+			this._consecutiveRetryErrorCount = 0;
 		}
 
 		if (await this._checkCompaction(message)) {
@@ -3807,6 +3839,8 @@ export class AgentSession {
 		if (this._retryAttempt === 0) return;
 		const attempt = this._retryAttempt;
 		this._retryAttempt = 0;
+		this._retryErrorFingerprint = undefined;
+		this._consecutiveRetryErrorCount = 0;
 		this._emit({
 			type: "auto_retry_end",
 			success: false,
@@ -3825,13 +3859,15 @@ export class AgentSession {
 			return false;
 		}
 
-		this._retryAttempt++;
-
-		if (this._retryAttempt > settings.maxRetries) {
-			// Preserve the completed attempt count so post-run handling can emit the final failure.
-			this._retryAttempt--;
+		if (
+			this._retryAttempt >= settings.maxRetries ||
+			this._wouldOpenRetryCircuit(message, settings.maxConsecutiveSameErrorRetries)
+		) {
 			return false;
 		}
+
+		this._recordRetryError(message);
+		this._retryAttempt++;
 
 		const delayMs = retryDelayMs(settings, this._retryAttempt);
 

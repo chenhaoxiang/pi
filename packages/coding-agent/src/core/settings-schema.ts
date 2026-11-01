@@ -2,7 +2,7 @@ import { ModelThinkingLevelSchema } from "@earendil-works/pi-ai/providers/model-
 import { type Static, type TSchemaOptions, Type } from "typebox";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 
-function nonNegativeSafeInteger(options: { default?: number } = {}) {
+function nonNegativeSafeInteger(options: TSchemaOptions = {}) {
 	return Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER, ...options });
 }
 
@@ -62,6 +62,12 @@ const RetrySettingsSchema = Type.Object({
 		}),
 	),
 	maxAgentDelayMs: Type.Optional(Type.Number({ default: SETTINGS_DEFAULTS.retry.maxAgentDelayMs })),
+	maxConsecutiveSameErrorRetries: Type.Optional(
+		nonNegativeSafeInteger({
+			description: "Stop after this many consecutive equivalent transient errors; 0 disables the circuit breaker.",
+			default: SETTINGS_DEFAULTS.retry.maxConsecutiveSameErrorRetries,
+		}),
+	),
 	provider: Type.Optional(ProviderRetrySettingsSchema),
 	maxDelayMs: Type.Optional(
 		Type.Number({

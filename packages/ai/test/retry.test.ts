@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { fauxAssistantMessage } from "../src/providers/faux.ts";
-import { isRetryableAssistantError, type RetryPolicy, retryAssistantCall, retryDelayMs } from "../src/utils/retry.ts";
+import {
+	DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES,
+	isRetryableAssistantError,
+	type RetryPolicy,
+	retryAssistantCall,
+	retryDelayMs,
+	retryErrorFingerprint,
+} from "../src/utils/retry.ts";
 
 const openAIExplicitRetryMessage =
 	"An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID req_******** in your message.";
@@ -166,6 +173,18 @@ describe("provider retry classification", () => {
 	});
 });
 
+describe("retryErrorFingerprint", () => {
+	it("collapses common request ids while preserving the failure class", () => {
+		expect(retryErrorFingerprint("503 overloaded request_id=req_abc123")).toBe(
+			retryErrorFingerprint("503 overloaded request_id=req_def456"),
+		);
+		expect(retryErrorFingerprint("503 overloaded request id: abc123")).toBe(
+			retryErrorFingerprint("503 overloaded request_id=req_def456"),
+		);
+		expect(retryErrorFingerprint("503 overloaded")).not.toBe(retryErrorFingerprint("429 rate limit"));
+	});
+});
+
 describe("retryDelayMs", () => {
 	it("follows the stepped schedule and stays at 100 seconds through retry 600", () => {
 		const seconds = [1, 3, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 26, 30, 35, 40, 50, 60, 70, 80, 90, 100];
@@ -230,6 +249,64 @@ describe("retryAssistantCall", () => {
 		expect(produce).toHaveBeenCalledTimes(4); // 1 initial + 3 retries
 		expect(onRetryScheduled).toHaveBeenCalledTimes(3);
 		expect(onRetryFinished).toHaveBeenCalledWith(false, 3, "terminated");
+	});
+
+	it("resets the circuit streak when the transient error changes", async () => {
+		const policy: RetryPolicy = {
+			enabled: true,
+			maxRetries: 6,
+			baseDelayMs: 0,
+			maxConsecutiveSameErrorRetries: 3,
+		};
+		const errors = [
+			"503 overloaded",
+			"429 rate limit",
+			"503 overloaded",
+			"429 rate limit",
+			"503 overloaded",
+			"429 rate limit",
+			"503 overloaded",
+		];
+		let index = 0;
+		const produce = vi.fn(async () =>
+			fauxAssistantMessage("", { stopReason: "error", errorMessage: errors[index++] ?? "503 overloaded" }),
+		);
+		const onRetryScheduled = vi.fn();
+		const onRetryFinished = vi.fn();
+
+		await retryAssistantCall(produce, policy, undefined, { onRetryScheduled, onRetryFinished });
+
+		expect(produce).toHaveBeenCalledTimes(7);
+		expect(onRetryScheduled).toHaveBeenCalledTimes(6);
+		expect(onRetryFinished).toHaveBeenCalledWith(false, 6, "503 overloaded");
+	});
+
+	it("opens a circuit for repeated equivalent transient errors before the broad retry budget", async () => {
+		const policy: RetryPolicy = {
+			enabled: true,
+			maxRetries: 600,
+			baseDelayMs: 0,
+			maxConsecutiveSameErrorRetries: DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES,
+		};
+		const produce = vi.fn(async () =>
+			fauxAssistantMessage("", {
+				stopReason: "error",
+				errorMessage: `503 overloaded request_id=req_${produce.mock.calls.length}`,
+			}),
+		);
+		const onRetryScheduled = vi.fn();
+		const onRetryFinished = vi.fn();
+
+		const res = await retryAssistantCall(produce, policy, undefined, { onRetryScheduled, onRetryFinished });
+
+		expect(res.stopReason).toBe("error");
+		expect(produce).toHaveBeenCalledTimes(DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES);
+		expect(onRetryScheduled).toHaveBeenCalledTimes(DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES - 1);
+		expect(onRetryFinished).toHaveBeenCalledWith(
+			false,
+			DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES - 1,
+			expect.any(String),
+		);
 	});
 
 	it("reports capped retry delays", async () => {

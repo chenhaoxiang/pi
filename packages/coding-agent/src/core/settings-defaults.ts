@@ -1,4 +1,7 @@
-import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } from "@earendil-works/pi-ai/utils/retry";
+import {
+	DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+	DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES,
+} from "@earendil-works/pi-ai/utils/retry";
 
 /** Runtime defaults shared by settings accessors and the published JSON Schema. */
 export const SETTINGS_DEFAULTS = {
@@ -20,6 +23,7 @@ export const SETTINGS_DEFAULTS = {
 		maxRetries: 600,
 		baseDelayMs: 1000,
 		maxAgentDelayMs: DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+		maxConsecutiveSameErrorRetries: DEFAULT_MAX_CONSECUTIVE_SAME_ERROR_RETRIES,
 		provider: {
 			maxRetryDelayMs: 60000,
 		},

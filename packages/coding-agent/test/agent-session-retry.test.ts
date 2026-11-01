@@ -59,11 +59,13 @@ describe("AgentSession retry", () => {
 		failCount?: number;
 		maxRetries?: number;
 		maxAgentDelayMs?: number;
+		maxConsecutiveSameErrorRetries?: number;
 		delayAssistantMessageEndMs?: number;
 	}) {
 		const failCount = options?.failCount ?? 1;
 		const maxRetries = options?.maxRetries ?? 3;
 		const maxAgentDelayMs = options?.maxAgentDelayMs ?? 60000;
+		const maxConsecutiveSameErrorRetries = options?.maxConsecutiveSameErrorRetries;
 		const delayAssistantMessageEndMs = options?.delayAssistantMessageEndMs ?? 0;
 		let callCount = 0;
 
@@ -97,7 +99,15 @@ describe("AgentSession retry", () => {
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
 		const modelRegistry = await createModelRegistry(authStorage, tempDir);
 		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
-		settingsManager.applyOverrides({ retry: { enabled: true, maxRetries, baseDelayMs: 1, maxAgentDelayMs } });
+		settingsManager.applyOverrides({
+			retry: {
+				enabled: true,
+				maxRetries,
+				baseDelayMs: 1,
+				maxAgentDelayMs,
+				...(maxConsecutiveSameErrorRetries === undefined ? {} : { maxConsecutiveSameErrorRetries }),
+			},
+		});
 
 		session = new AgentSession({
 			agent,
@@ -152,6 +162,28 @@ describe("AgentSession retry", () => {
 		expect(events).toContain("start:2");
 		expect(events).toContain("end:success=false");
 		expect(created.session.isRetrying).toBe(false);
+	});
+
+	it("opens a circuit after repeated equivalent transient errors", async () => {
+		const created = await createSession({ failCount: 99, maxRetries: 600, maxConsecutiveSameErrorRetries: 3 });
+		const events: string[] = [];
+		created.session.subscribe((event) => {
+			if (event.type === "auto_retry_start") events.push(`start:${event.attempt}`);
+			if (event.type === "auto_retry_end") events.push(`end:success=${event.success}`);
+		});
+
+		await created.session.prompt("Test");
+
+		expect(created.getCallCount()).toBe(3);
+		expect(events).toEqual(["start:1", "start:2", "end:success=false"]);
+		expect(created.session.isRetrying).toBe(false);
+	});
+
+	it("allows the circuit breaker to be disabled explicitly", async () => {
+		const created = await createSession({ failCount: 20, maxRetries: 20, maxConsecutiveSameErrorRetries: 0 });
+		await created.session.prompt("Test");
+
+		expect(created.getCallCount()).toBe(21);
 	});
 
 	it("caps agent retry delay", async () => {
