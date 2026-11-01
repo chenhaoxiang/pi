@@ -929,10 +929,12 @@ function normalizeCodexStatus(status: unknown): CodexResponseStatus | undefined 
 // SSE Parsing
 // ============================================================================
 
+type SseReadResult = { done: boolean; value?: Uint8Array };
+
 async function readSSEChunk(
 	reader: ReadableStreamDefaultReader<Uint8Array>,
 	timeoutMs: number | undefined,
-): Promise<ReadableStreamReadResult<Uint8Array>> {
+): Promise<SseReadResult> {
 	if (timeoutMs === undefined || timeoutMs <= 0) return reader.read();
 	return new Promise((resolve, reject) => {
 		let settled = false;
