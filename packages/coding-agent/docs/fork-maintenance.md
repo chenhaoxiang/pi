@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-11-01
+updated: 2026-11-04
 ssot: true
 owner: chx
 ---
@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.1` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.2` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 11 public workspace packages share `1.5.0-fork.1`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 11 public workspace packages share `1.5.0-fork.2`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
@@ -30,6 +30,12 @@ The fork adds only `stream disconnected before completion` and `stream closed be
 A failed assistant attempt remains in raw history but is omitted from subsequent model projection. Completed tool results remain; partial tool calls in the failed response are not executed. A synthetic session regression verifies these boundaries.
 
 This repairs recovery, not the upstream transport. It does not change provider routing, model limits, compression thresholds or total-request/idle timeouts, and does not prove that 700k-token production requests are reliable.
+
+## Rate-limit help URLs (1.5.0-fork.2)
+
+Transient TPM/RPM throttles can include a billing help URL even when the account has not exhausted its quota. Retry classification ignores HTTP/WebSocket URL contents before testing error keywords, so `/account/billing` cannot turn a throttle into a terminal account-limit error. A nonempty URL marker retains transport wording such as `request to <url> failed, reason:`; raw diagnostics and retry-event messages remain unchanged.
+
+Actual quota/billing exhaustion, subscription limits, cancellation and context-overflow handling remain intact. This does not make every HTTP 429 retryable or change the retry budget, stepped delays or consecutive-error circuit breaker.
 
 ## Codex response phase guard
 
@@ -49,6 +55,8 @@ Success, cancellation and non-retryable error handling are unchanged. The comple
 4. Run new disconnect/classifier, session/tool-recovery and installer-lock regressions, retaining existing tests unchanged.
 5. Build/pack and validate the Node consumer outside the repository. Check both bundled CLI and SDK versions. For the local macOS binary, freshly rebuild compiled assets at the exact clean committed release HEAD, then use `build-binaries.sh --skip-install --skip-build --platform darwin-arm64` and verify startup separately. Record that same-HEAD build command/exit status with the artifact hashes; version metadata alone is not binary-to-source proof.
 6. Review the exact commit and run applicable CI before merge/release. Record platform/request smoke tests separately from provider-free tests; do not infer real long-context reliability from synthetic fixtures.
+
+Fork CI uses the same credential-free `./test.sh` wrapper, including its two-worker bound; community CI retains direct `npm test`. This keeps every test and assertion while avoiding unbounded worker pressure on GC and child-process fixtures.
 
 Fork CI hydrates provider data from the immutable community `v1.5.0` source release asset, verifies SHA-256 `577ace662a466326d1a4b41f813579aeb5957679e796c577bae65820faea5d9a`, and runs `build:offline` plus every existing check and test. This explicit catalog refresh includes the 1.5.0 model metadata; do not retain an older catalog while claiming full 1.5.0 model support. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
 
