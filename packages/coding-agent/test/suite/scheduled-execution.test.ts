@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AgentSession } from "../../src/core/agent-session.ts";
 import { CacheWarmer } from "../../src/core/cache-warmer.ts";
 import type {
 	ScheduledExecutionRequest,
@@ -121,6 +122,7 @@ describe("native scheduled execution capability v1", () => {
 		harness = await createHarness();
 		const context = harness.session.extensionRunner.createContext();
 		expect(context.scheduledExecution?.version).toBe(1);
+		expect(AgentSession.scheduledExecutionVersion).toBe(context.scheduledExecution?.version);
 		const consume = (host: { scheduledExecution?: typeof context.scheduledExecution }) => {
 			if (host.scheduledExecution?.version !== 1) return "unsupported";
 			return "supported";

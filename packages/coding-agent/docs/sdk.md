@@ -71,7 +71,7 @@ A steering message enters after the current assistant turn and its tool calls. A
 
 ## Native scheduled custom turns
 
-`session.scheduledExecution` is capability version `1`. Extensions see the same optional capability through `ctx.scheduledExecution`; an older host may omit it. A resilient scheduler must refuse a missing/different version before it spends an attempt or sends inference. This API adds no scheduler, runner or authorization.
+`session.scheduledExecution` is capability version `1`. Extensions see the same optional capability through `ctx.scheduledExecution`; an older host may omit it. A resilient scheduler must refuse a missing/different version before it spends an attempt or sends inference. `AgentSession.scheduledExecutionVersion` is the additive static SDK declaration for a pre-construction check: it lets a model-session consumer reject an older SDK before admission, without constructing a second writer of a shared persistent transcript. It is metadata, not an execution handle; verify the actual instance capability again before inference. This API adds no scheduler, runner or authorization.
 
 ```typescript
 const capability = session.scheduledExecution;

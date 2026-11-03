@@ -398,6 +398,8 @@ function estimateMessagesTokens(messages: AgentMessage[]): number {
 // ============================================================================
 
 export class AgentSession {
+	/** Read-only SDK preflight declaration; consumers still verify the actual instance capability before execution. */
+	static readonly scheduledExecutionVersion = 1 as const;
 	readonly agent: Agent;
 	readonly sessionManager: SessionManager;
 	readonly settingsManager: SettingsManager;
