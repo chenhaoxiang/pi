@@ -431,16 +431,16 @@ export class ScheduledExecutionController implements ScheduledExecutionCapabilit
 		const run = this.run;
 		if (!run) return;
 		run.nativeClosed = true;
-		if (failureReason && run.reason === undefined) run.reason = failureReason;
+		if (failureReason) run.reason = failureReason;
 		if (run.owned.size > 0 && run.phase === "running") run.phase = "draining";
 		try {
 			await Promise.all([...run.owned.values()].map((owned) => owned.closed));
 			const checkpointEntryId = this.checkpoint(run);
 			const execution: ScheduledRunReceipt["execution"] =
-				run.phase === "cancelling"
-					? "cancelled"
-					: failureReason || run.ownedFailure
-						? "interrupted"
+				failureReason || run.ownedFailure
+					? "interrupted"
+					: run.phase === "cancelling"
+						? "cancelled"
 						: run.reason
 							? "deferred"
 							: run.lastStopReason === "error"
@@ -456,7 +456,7 @@ export class ScheduledExecutionController implements ScheduledExecutionCapabilit
 				binding: { ...run.request.binding },
 				finishedAt: new Date().toISOString(),
 				execution,
-				reason: run.reason ?? (run.ownedFailure ? "owned_handle_failed" : undefined),
+				reason: failureReason ?? run.reason ?? (run.ownedFailure ? "owned_handle_failed" : undefined),
 				checkpointEntryId,
 				effectStatus: run.startedTool || (run.declarations.effects?.length ?? 0) > 0 ? "unknown" : "none-observed",
 				businessOutcome: "unverified",
@@ -464,6 +464,7 @@ export class ScheduledExecutionController implements ScheduledExecutionCapabilit
 				retryNotBefore: run.retryNotBefore === undefined ? undefined : new Date(run.retryNotBefore).toISOString(),
 			};
 			this.host.persist(SCHEDULED_RECEIPT_ENTRY, receipt);
+			run.reason = receipt.reason;
 			run.phase = "settled";
 			this.run = undefined;
 			run.resolve(receipt);

@@ -775,6 +775,77 @@ describe("native scheduled execution capability v1", () => {
 		}
 	});
 
+	it("records a failed real pre-settle boundary as interrupted before releasing the exact native handle", async () => {
+		let failBoundary = true;
+		harness = await createHarness({
+			settings: { compaction: { enabled: false } },
+			extensionFactories: [
+				(pi) => {
+					pi.on("agent_before_settle", () =>
+						failBoundary
+							? { entries: [{ type: "custom", customType: "synthetic-boundary", data: { fixture: true } }] }
+							: undefined,
+					);
+				},
+			],
+		});
+		const append = harness.sessionManager.appendCustomEntry.bind(harness.sessionManager);
+		vi.spyOn(harness.sessionManager, "appendCustomEntry").mockImplementation((type, data) => {
+			if (type === "synthetic-boundary") throw new Error("synthetic boundary persistence failure");
+			return append(type, data);
+		});
+		harness.setResponses([fauxAssistantMessage("model completed; boundary still pending")]);
+		const handle = start(harness);
+		const receipt = await handle.settled;
+		await harness.session.waitForIdle();
+		expect(receipt).toMatchObject({
+			execution: "interrupted",
+			reason: "native_execution_failed",
+			businessOutcome: "unverified",
+		});
+		expect(harness.faux.state.callCount).toBe(1);
+		expect(harness.session.isIdle).toBe(true);
+		expect(harness.sessionManager.getEntry(receipt.checkpointEntryId)).toMatchObject({
+			type: "custom",
+			customType: SCHEDULED_CHECKPOINT_ENTRY,
+		});
+		const receipts = harness.sessionManager
+			.getEntries()
+			.filter((entry) => entry.type === "custom" && entry.customType === SCHEDULED_RECEIPT_ENTRY);
+		expect(receipts).toHaveLength(1);
+		expect(receipts[0]).toMatchObject({ type: "custom", data: { execution: "interrupted" } });
+		expect(handle.requestCancel()).toBe(false);
+		failBoundary = false;
+		harness.setResponses([fauxAssistantMessage("ordinary turn remains available")]);
+		await harness.session.prompt("ordinary continuation, not a scheduled replay");
+		expect(harness.session.getLastAssistantText()).toBe("ordinary turn remains available");
+	});
+
+	it("keeps ordinary pre-settle boundary failures observable as rejected prompts", async () => {
+		harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.on("agent_before_settle", () => ({
+						entries: [{ type: "custom", customType: "synthetic-boundary", data: {} }],
+					}));
+				},
+			],
+		});
+		const append = harness.sessionManager.appendCustomEntry.bind(harness.sessionManager);
+		vi.spyOn(harness.sessionManager, "appendCustomEntry").mockImplementation((type, data) => {
+			if (type === "synthetic-boundary") throw new Error("synthetic ordinary boundary failure");
+			return append(type, data);
+		});
+		harness.setResponses([fauxAssistantMessage("ordinary model stop")]);
+		await expect(harness.session.prompt("ordinary fixture")).rejects.toThrow("synthetic ordinary boundary failure");
+		expect(harness.session.isIdle).toBe(true);
+		expect(
+			harness.sessionManager
+				.getEntries()
+				.some((entry) => entry.type === "custom" && entry.customType === SCHEDULED_RECEIPT_ENTRY),
+		).toBe(false);
+	});
+
 	it("does not admit a replacement when durable checkpoint persistence failed", async () => {
 		harness = await createHarness();
 		const append = harness.sessionManager.appendCustomEntry.bind(harness.sessionManager);

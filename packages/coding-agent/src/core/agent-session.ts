@@ -1203,9 +1203,9 @@ export class AgentSession {
 		resolve();
 	}
 
-	private async _emitAgentSettled(): Promise<void> {
+	private async _emitAgentSettled(failureReason?: string): Promise<void> {
 		const scheduled = this._scheduledExecution.active;
-		await this._scheduledExecution.finishNative();
+		await this._scheduledExecution.finishNative(failureReason);
 		if (scheduled) {
 			this._retryAttempt = 0;
 			this._retryErrorFingerprint = undefined;
@@ -2068,19 +2068,17 @@ export class AgentSession {
 			else this._resolveIdleWaitIfIdle();
 			throw error;
 		}
-		// Messages held while the run was starting go before its starting messages, as they would
-		// have while idle. No run exists yet, so they cannot split a tool call from its result.
-		this._flushPendingBashMessages();
-		this._flushPendingCustomMessages();
-		onStarted?.();
-
-		// Compaction before the prompt may have scheduled a retry; the new prompt replaces it.
-		this._failedResponse = undefined;
-		this._recordSelection();
-		// The run records the loadout in the transcript; restored tools that did not register by now
-		// are dropped, so a tool that never registers does not stay pending.
-		this._pendingToolNames.clear();
+		let executionFailure: { error: unknown } | undefined;
 		try {
+			// Messages held while the run was starting precede its starting messages, never a tool/result pair.
+			this._flushPendingBashMessages();
+			this._flushPendingCustomMessages();
+			onStarted?.();
+
+			// Compaction before the prompt may have scheduled a retry; the new prompt replaces it.
+			this._failedResponse = undefined;
+			this._recordSelection();
+			this._pendingToolNames.clear();
 			if (!this._scheduledExecution.shouldStop) await this.agent.prompt(messages);
 			while (!this._agentRunAbortRequested && !this._scheduledExecution.shouldStop) {
 				if (await this._handlePostAgentRun()) {
@@ -2092,14 +2090,21 @@ export class AgentSession {
 				if (this._agentRunAbortRequested) break;
 				await this.agent.continue();
 			}
-		} finally {
+		} catch (error) {
+			executionFailure = { error };
+		}
+		try {
 			if (this._agentRunAbortRequested) this._finishCancelledRetry();
 			this._failedResponse = undefined;
 			this._runSystemPromptOptions = undefined;
 			this._flushPendingBashMessages();
 			this._flushPendingCustomMessages();
-			await this._emitAgentSettled();
+		} catch (error) {
+			executionFailure ??= { error };
 		}
+		// Capture boundary/cleanup failures before any receipt releases the exact owner, then preserve rejection.
+		await this._emitAgentSettled(executionFailure ? "native_execution_failed" : undefined);
+		if (executionFailure) throw executionFailure.error;
 	}
 
 	/**
