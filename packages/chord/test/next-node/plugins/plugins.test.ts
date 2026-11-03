@@ -377,6 +377,41 @@ describe("current sets (slice 10 D11)", () => {
 });
 
 describe("installs through the component", () => {
+	it("keeps plugin additions and removals pending across another plugin's dependency install", async () => {
+		const root = await tempRoot();
+		await itemPlugin(root, "a", "a1");
+		await itemPlugin(root, "c", "c1");
+		const tools = await tempRoot();
+		await writeFiles(tools, { "npm.mjs": "process.exit(0);" });
+		const plugins = createPlugins(
+			{
+				roots: [root],
+				kinds: kindsOf(HOST_PACKAGES),
+				install: { npmCommand: [process.execPath, join(tools, "npm.mjs")] },
+				onError: () => {},
+			},
+			context,
+		);
+		const host = createHost({ onError: () => {} });
+		await plugins.load(host, { kind: "worker", core: [], modules: HOST_PACKAGES }, context);
+		await itemPlugin(root, "b", "b1");
+		await rm(join(root, "c"), { recursive: true });
+		await vi.waitFor(() => expect(plugins.state.value.set).toBe(true));
+		await plugins.installDependencies("@test/a", context);
+		const built = await plugins.build(["@test/a"], context);
+		expect(built.removed).toEqual(["@test/c"]);
+		expect(built.facets.map(({ plugin }) => plugin).sort()).toEqual(["@test/a", "@test/b"]);
+		await plugins.reload(host, built, context);
+		expect(
+			plugins
+				.current("worker")
+				?.map(({ plugin }) => plugin.name)
+				.sort(),
+		).toEqual(["@test/a", "@test/b"]);
+		await host.close(context);
+		plugins.close();
+	});
+
 	it("clears the plugin's install mark and dirties it", async () => {
 		const root = await tempRoot();
 		await itemPlugin(root, "a", "a1");

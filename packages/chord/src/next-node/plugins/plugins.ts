@@ -136,6 +136,8 @@ class PluginsComponent implements Plugins {
 	readonly #runtime: PluginRuntime;
 	#discovery: Discovery = { plugins: [], problems: [] };
 	#discovered = false;
+	/** Names handed to a build (or initial load), not a metadata-only install refresh. */
+	#buildKnownPlugins = new Set<string>();
 	/** The latest build of every (plugin, kind) built so far, by `plugin\u0000kind`. */
 	readonly #built = new Map<string, BuiltFacet>();
 	/** The current set of each kind used so far, by plugin name. */
@@ -170,9 +172,10 @@ class PluginsComponent implements Plugins {
 	}
 
 	async build(names: readonly string[], context: Context): Promise<Built> {
-		const before = new Set(this.#discovery.plugins.map(({ name }) => name));
+		const before = this.#buildKnownPlugins;
 		if (!this.#discovered || this.#watcher.needsDiscovery) await this.#discover(context);
 		const now = this.#discovery.plugins;
+		this.#buildKnownPlugins = new Set(now.map(({ name }) => name));
 		const removed = [...before].filter((name) => !now.some((plugin) => plugin.name === name));
 		const wanted = now.filter(({ name }) => names.includes(name) || !before.has(name));
 		const snapshot = this.#watcher.snapshot([...wanted.map(({ name }) => name), ...removed]);
@@ -278,6 +281,7 @@ class PluginsComponent implements Plugins {
 			{ kinds: Object.keys(this.#options.kinds) },
 			context,
 		);
+		if (!this.#discovered) this.#buildKnownPlugins = new Set(this.#discovery.plugins.map(({ name }) => name));
 		this.#discovered = true;
 		this.#watcher.know(this.#discovery, seen);
 	}

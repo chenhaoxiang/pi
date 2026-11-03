@@ -54,13 +54,13 @@ Fork CI hydrates provider data from the immutable community `v1.5.0` source rele
 
 ## 1.5.0 synchronization notes
 
-The new pi-schema workspace is included in exact dependency pins and fork-owned installer assets. The maintained sandbox example and its security fixtures remain available even though community 1.5.0 removed that example; shx remains development-only for the existing security regression. Undici 8.12.3 retains the community runtime update after review of its HTTP/2 timeout-connection and queued-request async-context fixes.
+The new pi-schema workspace is included in exact dependency pins and fork-owned installer assets. The maintained sandbox example and its security fixtures remain available even though community 1.5.0 removed that example; shx remains development-only for the existing security regression. Undici 8.12.3 retains the community runtime update after review of its HTTP/2 timeout-connection and queued-request async-context fixes. The development Vite override, lock and clean installation are aligned at community 8.3.4 after review of its HMR, preload, CSS, watcher and non-major dependency changes.
 
 Provider-free macOS validation exposed ENOTSOCK stale lock handling and a WebSocket close frame discarded by an immediate terminate. The fork retains fail-closed stale-lock behavior and preserves an already-started protocol close (including 1009). Plugin installs refresh pending discovery metadata. Darwin fixture writes allow queued file events to settle before taking snapshots; assertions are unchanged. Use a real, non-symlink temporary root such as `/private/tmp` for path-sensitive fixtures. Source, CI, release, download and installed loading are verified separately; these notes do not claim publication or active-session activation.
 
 ## Dependency security maintenance
 
-Review the [dependency security record](fork-dependency-security-2026-10-08.md) when refreshing the development lock or copying the sandbox example. Raw audits and accepted-advisory policy results are different; the two upstream node-forge/Gondolin high findings remain open. Source maintenance does not overwrite the installed immutable release.
+Review the [dependency security record](fork-dependency-security-2026-10-08.md) when refreshing the development lock or copying the sandbox example. Its two node-forge/Gondolin high findings describe that historical dependency tree. The 1.5.0 candidate's Gondolin 0.14.0 update removes the old node-forge path; that is not a zero-vulnerability claim for other dependencies or proof that old installations changed. Raw audits and accepted-advisory policy results are different. Source maintenance does not overwrite the installed immutable release.
 
 ## Distribution
 
