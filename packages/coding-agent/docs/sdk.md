@@ -69,6 +69,38 @@ A steering message enters after the current assistant turn and its tool calls. A
 
 `abort()` stops the active operation and waits for the session to become idle. `waitForIdle()` waits without aborting it.
 
+## Native scheduled custom turns
+
+`session.scheduledExecution` is capability version `1`. Extensions see the same optional capability through `ctx.scheduledExecution`; an older host may omit it. A resilient scheduler must refuse a missing/different version before it spends an attempt or sends inference. This API adds no scheduler, runner or authorization.
+
+```typescript
+const capability = session.scheduledExecution;
+if (capability?.version !== 1) throw new Error("Unsupported native scheduled execution");
+const accepted = capability.start({
+  binding: { jobId: "job", attemptId: "attempt", ownerSessionId: session.sessionId, ownerEpoch: 1, revision: 1 },
+  policy: { softDeadlineMs: 25 * 60_000, hardDeadlineMs: 45 * 60_000 },
+  content: "Advance this already-authorized occurrence without repeating completed work.",
+});
+if (!accepted.accepted) throw new Error(accepted.reason);
+const handle = accepted.handle;
+// A request is not an exit acknowledgement. The exact handle remains owned until settled.
+handle.requestDrain("slice_finished");
+const receipt = await handle.settled;
+console.log(receipt.execution, receipt.checkpointEntryId); // Business outcome is still unverified.
+```
+
+`start()` accepts only an idle session with no pending input. It persists the accepted job/attempt/session/epoch/revision and returns an opaque run handle; those values do not come from model message details. Busy/disposed refusals start no inference. The accepted policy is copied, never temporarily installed in `SettingsManager`. The scheduler remains responsible for its store-wide single-flight admission and finite lifetime/daily/expiry bounds.
+
+The scheduled profile permits at most three additional retries per response, stops after three equivalent failed responses including the first, and defaults to five minutes of cumulative failed-call/retry-wait recovery time. Successful reasoning does not spend or replenish recovery time. Native classification, fingerprinting and stepped backoff are reused; provider retries are disabled for the accepted run. The SDK also cancels prior cache warming and does not register extra warming requests for this finite run; warming configuration and subsequent ordinary prompts are unchanged. Actual exposed Retry-After headers are respected or deferred, never capped into an early retry. Soft/hard elapsed deadlines use monotonic time and are independent of cadence, provider acknowledgement/idle timeouts and tool-specific timeouts. They cannot exceed one day; the soft budget must precede the explicit hard budget. No global retry/model/provider configuration is changed.
+
+`handle.snapshot()` is metadata only. `request-started` means the runtime called its stream adapter, not that a network request reached the provider; `response-received` requires actual exposed response headers. Missing transport stages, time to first byte and business progress remain unknown. Counts/heartbeats do not prove business output.
+
+`requestDrain()` stops new direct and nested tools at the next guard and closes at a safe native boundary without requesting final prose. `handle.checkpoint()` persists real completed result-entry references at any native/local boundary, including while draining; optional artifact/hash/effect/next-action declarations remain unverified. Automatic tool-batch checkpoints and the final checkpoint survive a failed final summary without rerunning tools. At most 256 recent result references are projected; the completed count and raw transcript retain the earlier history. Neither declarations nor an error-free tool imply external effect completion.
+
+`requestCancel()` signals only this exact native run. Non-cooperative tools and explicitly owned operations retain the slot. To bind a child the run actually owns, call `handle.own({ id, closed, cancel? })` with its real closure promise; detached notifications do not qualify. `settled` resolves only after the native loop and those handles end and a checkpoint/receipt is persisted. A checkpoint/receipt persistence failure leaves attention-required ownership rather than releasing a replacement. Old handles cannot cancel a later user run. Explicit user input queued while a scheduled run is active starts a separate ordinary turn after exact closure; user extension commands and the legacy `ctx.abort(): void` contract are retained.
+
+Native metadata uses append-only `pi.scheduled-start.v1`, `pi.scheduled-checkpoint.v1` and `pi.scheduled-receipt.v1` custom entries. A file-backed session explicitly materializes its buffered entries before native metadata is accepted, even if no user/assistant reply exists yet. The additive synchronous `SessionManager.flush()` performs that opt-in materialization; ordinary interaction remains lazy and `SessionManager.inMemory()` intentionally remains memory-only, not crash recovery storage. These entries are not model context. Runtime completion/cancellation does not establish business success, effect rollback, a safe replay or renewed authority. A scheduler must reconcile uncertain effects before resuming them. This native slice does not itself migrate or re-enable any historical job. The cross-repository owner acceptance is [Schedule resilient-serial-scheduling](https://github.com/chenhaoxiang/pi-schedule-prompt/tree/feat/resilient-serial-scheduling-20261103/openspec/changes/resilient-serial-scheduling).
+
 ## Subscribing to events
 
 Subscribe before prompting when the host needs streamed output:

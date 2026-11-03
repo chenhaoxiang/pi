@@ -36,6 +36,7 @@ import {
 	contentText,
 	getCurrentSystemMessage,
 	getCurrentTools,
+	type RetryPolicy,
 	retryDelayMs,
 	retryErrorFingerprint,
 } from "@earendil-works/pi-ai";
@@ -127,6 +128,7 @@ import type { ModelRuntime } from "./model-runtime.ts";
 import { NestedToolCallRunner } from "./nested-tool-calls.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
+import { type ScheduledExecutionCapability, ScheduledExecutionController } from "./scheduled-execution.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
 import {
 	type BranchSummaryEntry,
@@ -405,6 +407,9 @@ export class AgentSession {
 	// Event subscription state
 	private _unsubscribeAgent?: () => void;
 	private _eventListeners: AgentSessionEventListener[] = [];
+	private readonly _scheduledExecution: ScheduledExecutionController;
+	private _scheduledCompatStream?: StreamFn;
+	private _scheduledInputs: Array<{ text: string; action: () => Promise<void> }> = [];
 	private _isAgentRunActive = false;
 	private _agentRunAbortRequested = false;
 	private _idleWaitPromise: Promise<void> | undefined;
@@ -512,6 +517,50 @@ export class AgentSession {
 		this._customTools = config.customTools ?? [];
 		this._cwd = config.cwd;
 		this._modelRuntime = config.modelRuntime;
+		this._scheduledExecution = new ScheduledExecutionController({
+			sessionId: this.sessionId,
+			isIdle: () =>
+				this.isIdle &&
+				this.pendingMessageCount === 0 &&
+				!this.agent.hasQueuedMessages() &&
+				!this._isEmittingAgentSettled,
+			execute: async (request, runId) => {
+				// Warming is an optional extra request, not part of this finite scheduled run.
+				this._cacheWarmer?.cancel();
+				await this._startRun({
+					messageType: "custom",
+					message: {
+						role: "custom",
+						customType: "scheduled_prompt",
+						content: request.content,
+						display: false,
+						details: { nativeRunId: runId, ...request.binding },
+						timestamp: Date.now(),
+					},
+				});
+			},
+			abort: () => {
+				this._agentRunAbortRequested = true;
+				this.abortRetry();
+				this.abortCompaction();
+				this.agent.abort();
+			},
+			interruptRetry: () => this.abortRetry(),
+			persist: (type, data) => {
+				// Durable native metadata must not wait for the first model reply to materialize a fresh session.
+				this.sessionManager.flush();
+				const id = this.sessionManager.appendCustomEntry(type, data);
+				const entry = this.sessionManager.getEntry(id);
+				if (entry) this._emit({ type: "entry_appended", entry });
+				return id;
+			},
+			onError: (error) =>
+				this._extensionRunner.emitError({
+					extensionPath: "<scheduled-execution>",
+					event: "scheduled_execution",
+					error: error instanceof Error ? error.message : String(error),
+				}),
+		});
 		this._cacheWarmer = config.cacheWarmer;
 		if (this._cacheWarmer) {
 			this._cacheWarmer.onWarmed = (entry) => this._emit({ type: "entry_appended", entry });
@@ -532,6 +581,7 @@ export class AgentSession {
 		// Always subscribe to agent events for internal handling
 		// (session persistence, extensions, auto-compaction, retry logic)
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
+		this._installScheduledRequestPolicy();
 		this._installAgentToolHooks();
 		this._installAgentNextTurnRefresh();
 		this._installAgentRequestProjection();
@@ -548,6 +598,42 @@ export class AgentSession {
 
 	get modelRuntime(): ModelRuntime {
 		return this._modelRuntime;
+	}
+
+	/** Additive native scheduled custom-turn capability; ordinary prompts keep their existing policy. */
+	get scheduledExecution(): ScheduledExecutionCapability {
+		return this._scheduledExecution;
+	}
+
+	private _installScheduledRequestPolicy(): void {
+		const previous = this.agent.streamFunction;
+		const controlled: StreamFn = async (model, context, options) => {
+			const request = this._scheduledExecution.beginRequest();
+			if (!request) return previous(model, context, options);
+			try {
+				const response = await previous(model, context, {
+					...options,
+					// AgentSession owns retries for this accepted run; do not nest provider retries.
+					maxRetries: 0,
+					onResponse: async (event) => {
+						this._scheduledExecution.observeResponse(request, event.status, event.headers);
+						await options?.onResponse?.(event, model);
+					},
+				});
+				void response.result().then(
+					(message) => this._scheduledExecution.endRequest(request, message.stopReason === "error"),
+					() => this._scheduledExecution.endRequest(request, true),
+				);
+				return response;
+			} catch (error) {
+				this._scheduledExecution.endRequest(request, true);
+				throw error;
+			}
+		};
+		const runtime = runtimeStreamFunctions.get(previous);
+		if (runtime) markRuntimeStreamFunction(controlled, runtime);
+		if (previous === streamSimple) this._scheduledCompatStream = controlled;
+		this.agent.streamFunction = controlled;
 	}
 
 	private async _getRequiredRequestAuth(
@@ -608,7 +694,7 @@ export class AgentSession {
 					signal,
 				})
 			: { model: selectedModel, thinkingLevel: this.thinkingLevel };
-		if (this.agent.streamFunction === streamSimple) {
+		if (this.agent.streamFunction === streamSimple || this.agent.streamFunction === this._scheduledCompatStream) {
 			return { ...(await this._getRequiredRequestAuth(model, signal)), thinkingLevel };
 		}
 		if (runtimeStreamFunctions.get(this.agent.streamFunction) === this._modelRuntime) {
@@ -683,19 +769,35 @@ export class AgentSession {
 		{ toolCall, args }: BeforeToolCallContext,
 		parentToolCallId?: string,
 	): Promise<BeforeToolCallResult | undefined> {
+		if (this._scheduledExecution.shouldStop)
+			return {
+				block: true,
+				terminate: true,
+				reason:
+					"Scheduled run is draining/cancelling; this operation was not executed. Native checkpoint access remains available.",
+			};
 		const runner = this._extensionRunner;
 		if (!runner.hasHandlers("tool_call")) {
+			this._scheduledExecution.recordToolStart();
 			return undefined;
 		}
 
 		try {
-			return await runner.emitToolCall({
+			const decision = await runner.emitToolCall({
 				type: "tool_call",
 				toolName: toolCall.name,
 				toolCallId: toolCall.id,
 				...(parentToolCallId ? { parentToolCallId } : {}),
 				input: args as Record<string, unknown>,
 			});
+			if (this._scheduledExecution.shouldStop)
+				return {
+					block: true,
+					terminate: true,
+					reason: "Scheduled run stopped during tool preflight; operation not executed",
+				};
+			if (!decision?.block) this._scheduledExecution.recordToolStart();
+			return decision;
 		} catch (err) {
 			if (err instanceof Error) {
 				throw err;
@@ -913,6 +1015,8 @@ export class AgentSession {
 			this._boundaryDispatchedMessages.add(turn.message);
 			const extensionContinue = await this._dispatchTurnEndBoundary(turn.message, turn.toolResults);
 			const previousDecision = await previousFinishTurn?.(turn, signal);
+			this._scheduledExecution.active?.checkpoint();
+			if (this._scheduledExecution.shouldStop) return { action: "end" };
 			if (previousDecision?.action === "end") return previousDecision;
 			if (extensionContinue || previousDecision?.action === "continue") return { action: "continue" };
 			return undefined;
@@ -1070,7 +1174,7 @@ export class AgentSession {
 		this._emit({
 			type: "queue_update",
 			steering: [...this._steeringMessages],
-			followUp: [...this._followUpMessages],
+			followUp: [...this.getFollowUpMessages()],
 		});
 	}
 
@@ -1100,6 +1204,14 @@ export class AgentSession {
 	}
 
 	private async _emitAgentSettled(): Promise<void> {
+		const scheduled = this._scheduledExecution.active;
+		await this._scheduledExecution.finishNative();
+		if (scheduled) {
+			this._retryAttempt = 0;
+			this._retryErrorFingerprint = undefined;
+			this._consecutiveRetryErrorCount = 0;
+			this._lastAssistantMessage = undefined;
+		}
 		this._cacheWarmer?.onAgentSettled();
 		this._isAgentRunActive = false;
 		this._isEmittingAgentSettled = true;
@@ -1111,7 +1223,9 @@ export class AgentSession {
 			this._isEmittingAgentSettled = false;
 		}
 
-		const deferred = this._deferredSettledActions.splice(0);
+		const scheduledInputs = this._scheduledInputs.splice(0);
+		if (scheduledInputs.length > 0) this._emitQueueUpdate();
+		const deferred = [...scheduledInputs.map((input) => input.action), ...this._deferredSettledActions.splice(0)];
 		if (deferred.length > 0) {
 			try {
 				for (const action of deferred) await action();
@@ -1188,12 +1302,22 @@ export class AgentSession {
 				// Regular LLM message - persist as SessionMessageEntry
 				entryId = this.sessionManager.appendMessage(event.message);
 			}
-			if (entryId) this._entryIdsByMessage.set(event.message, entryId);
+			if (entryId) {
+				this._entryIdsByMessage.set(event.message, entryId);
+				if (event.message.role === "toolResult")
+					this._scheduledExecution.recordResult({
+						entryId,
+						toolCallId: event.message.toolCallId,
+						toolName: event.message.toolName,
+						isError: event.message.isError,
+					});
+			}
 			// Other message types (bashExecution, compactionSummary, branchSummary) are persisted elsewhere
 
 			if (event.message.role === "assistant") {
 				const assistantMsg = event.message as AssistantMessage;
 				this._lastAssistantMessage = assistantMsg;
+				this._scheduledExecution.recordAssistant(assistantMsg);
 				if (assistantMsg.stopReason !== "error" && assistantMsg.stopReason !== "length") {
 					this._overflowRecoveryAttempted = false;
 				}
@@ -1226,8 +1350,14 @@ export class AgentSession {
 	};
 
 	private _willRetryAfterAgentEnd(event: Extract<AgentEvent, { type: "agent_end" }>): boolean {
-		if (this._agentRunAbortRequested) return false;
-		const settings = this.settingsManager.getRetrySettings();
+		if (this._agentRunAbortRequested || this._scheduledExecution.shouldStop) return false;
+		const settings = this._executionRetryPolicy();
+		if (
+			!this._scheduledExecution.canRetry(
+				this._scheduledExecution.retryDelay(retryDelayMs(settings, this._retryAttempt + 1)),
+			)
+		)
+			return false;
 		if (!settings.enabled || this._retryAttempt >= settings.maxRetries) {
 			return false;
 		}
@@ -1245,7 +1375,7 @@ export class AgentSession {
 		return false;
 	}
 
-	private _wouldOpenRetryCircuit(message: AssistantMessage, limit: number): boolean {
+	private _wouldOpenRetryCircuit(message: AssistantMessage, limit = 12): boolean {
 		if (limit <= 0) return false;
 		const fingerprint = retryErrorFingerprint(message.errorMessage || "Unknown error");
 		const nextCount = fingerprint === this._retryErrorFingerprint ? this._consecutiveRetryErrorCount + 1 : 1;
@@ -1456,6 +1586,7 @@ export class AgentSession {
 	 * Call this when completely done with the session.
 	 */
 	dispose(): void {
+		this._scheduledExecution.dispose();
 		try {
 			this.abortRetry();
 			this.abortCompaction();
@@ -1528,7 +1659,7 @@ export class AgentSession {
 
 	/** Whether the session has no active agent run, compaction, branch summary, retry, or queued continuation. */
 	get isIdle(): boolean {
-		return !this._isAgentRunActive && !this.isCompacting;
+		return !this._isAgentRunActive && !this.isCompacting && !this._scheduledExecution.active;
 	}
 
 	/** Current effective system prompt, including changes not yet sent to the model. */
@@ -1928,10 +2059,13 @@ export class AgentSession {
 		try {
 			messages = await this._prepareRun(trigger);
 		} catch (error) {
+			const scheduled = this._scheduledExecution.active;
+			await this._scheduledExecution.finishNative("start_failed");
 			this._isAgentRunActive = false;
 			this._flushPendingBashMessages();
 			this._flushPendingCustomMessages();
-			this._resolveIdleWaitIfIdle();
+			if (scheduled) await this._emitAgentSettled();
+			else this._resolveIdleWaitIfIdle();
 			throw error;
 		}
 		// Messages held while the run was starting go before its starting messages, as they would
@@ -1947,8 +2081,8 @@ export class AgentSession {
 		// are dropped, so a tool that never registers does not stay pending.
 		this._pendingToolNames.clear();
 		try {
-			await this.agent.prompt(messages);
-			while (!this._agentRunAbortRequested) {
+			if (!this._scheduledExecution.shouldStop) await this.agent.prompt(messages);
+			while (!this._agentRunAbortRequested && !this._scheduledExecution.shouldStop) {
 				if (await this._handlePostAgentRun()) {
 					if (this._agentRunAbortRequested) break;
 					await this.agent.continue();
@@ -2028,6 +2162,7 @@ export class AgentSession {
 	}
 
 	private async _handlePostAgentRun(): Promise<boolean> {
+		if (this._scheduledExecution.shouldStop) return false;
 		const message = this._lastAssistantMessage;
 		this._lastAssistantMessage = undefined;
 		if (this._agentRunAbortRequested) {
@@ -2058,6 +2193,7 @@ export class AgentSession {
 			this._consecutiveRetryErrorCount = 0;
 		}
 
+		if (this._scheduledExecution.shouldStop) return false;
 		if (await this._checkCompaction(message)) {
 			return !this._agentRunAbortRequested;
 		}
@@ -2068,6 +2204,7 @@ export class AgentSession {
 	}
 
 	private async _runBeforeSettleBoundary(): Promise<boolean> {
+		if (this._scheduledExecution.shouldStop) return false;
 		if (!this._extensionRunner.hasHandlers("agent_before_settle")) return this.agent.hasQueuedMessages();
 		this._isBeforeSettle = true;
 		this._abortDuringBeforeSettle = false;
@@ -2160,6 +2297,19 @@ export class AgentSession {
 			}
 		}
 
+		if (this._scheduledExecution.active) {
+			if (!options?.streamingBehavior)
+				throw new Error(
+					"Agent is already processing a scheduled run. Specify streamingBehavior to queue a separate user turn.",
+				);
+			this._scheduledInputs.push({
+				text,
+				action: () => this.prompt(text, { ...options, streamingBehavior: undefined }),
+			});
+			this._emitQueueUpdate();
+			preflightResult?.("queued");
+			return;
+		}
 		if (this._compactionAbortController !== undefined) {
 			throw new Error(
 				"Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
@@ -2296,6 +2446,11 @@ export class AgentSession {
 		if (text.startsWith("/")) {
 			this._throwIfExtensionCommand(text);
 		}
+		if (this._scheduledExecution.active) {
+			this._scheduledInputs.push({ text, action: () => this.prompt(text, { images, source }) });
+			this._emitQueueUpdate();
+			return "queued";
+		}
 
 		const processedInput = await this._runInputHandlers(
 			text,
@@ -2422,6 +2577,12 @@ export class AgentSession {
 		} satisfies CustomMessage<T>;
 		if (options?.deliverAs === "nextTurn") {
 			this._pendingNextTurnMessages.push(appMessage);
+		} else if (this._scheduledExecution.active && options?.triggerTurn !== false) {
+			this._scheduledInputs.push({
+				text: `[${message.customType}]`,
+				action: () => this.sendCustomMessage(message, { ...options, triggerTurn: true }),
+			});
+			this._emitQueueUpdate();
 		} else if (this.isStreaming && options?.triggerTurn !== false) {
 			if (options?.deliverAs === "followUp") {
 				this.agent.followUp(appMessage);
@@ -2518,7 +2679,8 @@ export class AgentSession {
 	 */
 	clearQueue(): { steering: string[]; followUp: string[] } {
 		const steering = [...this._steeringMessages];
-		const followUp = [...this._followUpMessages];
+		const followUp = [...this.getFollowUpMessages()];
+		this._scheduledInputs = [];
 		this._steeringMessages = [];
 		this._followUpMessages = [];
 		this.agent.clearAllQueues();
@@ -2528,7 +2690,7 @@ export class AgentSession {
 
 	/** Number of pending messages (includes both steering and follow-up) */
 	get pendingMessageCount(): number {
-		return this._steeringMessages.length + this._followUpMessages.length;
+		return this._steeringMessages.length + this._followUpMessages.length + this._scheduledInputs.length;
 	}
 
 	/** Get pending steering messages (read-only) */
@@ -2538,7 +2700,7 @@ export class AgentSession {
 
 	/** Get pending follow-up messages (read-only) */
 	getFollowUpMessages(): readonly string[] {
-		return this._followUpMessages;
+		return [...this._followUpMessages, ...this._scheduledInputs.map((input) => input.text)];
 	}
 
 	get resourceLoader(): ResourceLoader {
@@ -2549,6 +2711,7 @@ export class AgentSession {
 	 * Abort current operation and wait for agent to become idle.
 	 */
 	async abort(): Promise<void> {
+		this._scheduledExecution.active?.requestCancel("user_abort");
 		if (this._isAgentRunActive) {
 			this._agentRunAbortRequested = true;
 		}
@@ -2852,7 +3015,7 @@ export class AgentSession {
 			request.thinkingLevel,
 			this.agent.streamFunction,
 			request.env,
-			this.settingsManager.getRetrySettings(),
+			this._executionRetryPolicy(),
 			this._summarizationRetryCallbacks({ source: "compaction", reason }),
 			undefined, // sessionId
 		);
@@ -3552,6 +3715,7 @@ export class AgentSession {
 				isIdle: () => this.isIdle,
 				isProjectTrusted: () => this.settingsManager.isProjectTrusted(),
 				getSignal: () => this.agent.signal,
+				getScheduledExecution: () => this.scheduledExecution,
 				abort: () => {
 					if (this._extensionAbortHandler) {
 						this._extensionAbortHandler();
@@ -3819,6 +3983,10 @@ export class AgentSession {
 	 * Check if an error is retryable (overloaded, rate limit, server errors).
 	 * Context overflow errors are NOT retryable (handled by compaction instead).
 	 */
+	private _executionRetryPolicy(): RetryPolicy {
+		return this._scheduledExecution.retryPolicy(this.settingsManager.getRetrySettings());
+	}
+
 	private _isRetryableError(message: AssistantMessage): boolean {
 		// Context overflow is handled by compaction, not retry.
 		if (isContextOverflow(message, (this._modelForMessage(message) ?? this.model)?.contextWindow ?? 0)) return false;
@@ -3834,8 +4002,19 @@ export class AgentSession {
 	private _summarizationRetryCallbacks(
 		source: { source: "branchSummary" } | { source: "compaction"; reason: "manual" | "threshold" | "overflow" },
 	): RetryCallbacks {
+		let waitStarted: number | undefined;
+		const recordWait = () => {
+			if (waitStarted === undefined) return;
+			this._scheduledExecution.recordRetryWait(performance.now() - waitStarted);
+			waitStarted = undefined;
+		};
 		return {
 			onRetryScheduled: (attempt, maxAttempts, delayMs, errorMessage) => {
+				if (this._scheduledExecution.retryDelay(delayMs) > delayMs || !this._scheduledExecution.canRetry(delayMs)) {
+					this._scheduledExecution.active?.requestDrain("recovery_budget_exhausted");
+					throw new Error("Scheduled recovery budget exhausted");
+				}
+				waitStarted = performance.now();
 				this._emit({
 					type: "summarization_retry_scheduled",
 					attempt,
@@ -3845,12 +4024,16 @@ export class AgentSession {
 				});
 			},
 			onRetryAttemptStart: () => {
+				recordWait();
+				if (!this._scheduledExecution.canRetry(0)) throw new Error("Scheduled recovery budget exhausted");
 				this._emit({
 					type: "summarization_retry_attempt_start",
 					...source,
 				});
 			},
-			onRetryFinished: () => {
+			onRetryFinished: (success) => {
+				recordWait();
+				if (!success) this._scheduledExecution.active?.requestDrain("summarization_retry_exhausted");
 				this._emit({ type: "summarization_retry_finished" });
 			},
 		};
@@ -3875,7 +4058,7 @@ export class AgentSession {
 	 * @returns true if the caller should continue the agent, false otherwise
 	 */
 	private async _prepareRetry(message: AssistantMessage): Promise<boolean> {
-		const settings = this.settingsManager.getRetrySettings();
+		const settings = this._executionRetryPolicy();
 		if (!settings.enabled) {
 			return false;
 		}
@@ -3884,13 +4067,17 @@ export class AgentSession {
 			this._retryAttempt >= settings.maxRetries ||
 			this._wouldOpenRetryCircuit(message, settings.maxConsecutiveSameErrorRetries)
 		) {
+			this._scheduledExecution.active?.requestDrain("response_retry_exhausted");
 			return false;
 		}
 
+		const delayMs = this._scheduledExecution.retryDelay(retryDelayMs(settings, this._retryAttempt + 1));
+		if (!this._scheduledExecution.canRetry(delayMs)) {
+			this._scheduledExecution.active?.requestDrain("recovery_budget_exhausted");
+			return false;
+		}
 		this._recordRetryError(message);
 		this._retryAttempt++;
-
-		const delayMs = retryDelayMs(settings, this._retryAttempt);
 
 		this._emit({
 			type: "auto_retry_start",
@@ -3905,6 +4092,7 @@ export class AgentSession {
 
 		// Wait with exponential backoff (abortable)
 		this._retryAbortController = new AbortController();
+		const waitStarted = performance.now();
 		try {
 			await sleep(delayMs, this._retryAbortController.signal);
 		} catch {
@@ -3912,10 +4100,11 @@ export class AgentSession {
 			this._finishCancelledRetry();
 			return false;
 		} finally {
+			this._scheduledExecution.recordRetryWait(performance.now() - waitStarted);
 			this._retryAbortController = undefined;
 		}
 
-		return true;
+		return !this._scheduledExecution.shouldStop;
 	}
 
 	/**

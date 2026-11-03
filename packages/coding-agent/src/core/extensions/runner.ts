@@ -375,6 +375,7 @@ export class ExtensionRunner {
 	private isIdleFn: () => boolean = () => true;
 	private isProjectTrustedFn: () => boolean = () => true;
 	private getSignalFn: () => AbortSignal | undefined = () => undefined;
+	private getScheduledExecutionFn: ExtensionContextActions["getScheduledExecution"];
 	private waitForIdleFn: () => Promise<void> = async () => {};
 	private abortFn: () => void = () => {};
 	private hasPendingMessagesFn: () => boolean = () => false;
@@ -449,6 +450,7 @@ export class ExtensionRunner {
 		this.isIdleFn = contextActions.isIdle;
 		this.isProjectTrustedFn = contextActions.isProjectTrusted;
 		this.getSignalFn = contextActions.getSignal;
+		this.getScheduledExecutionFn = contextActions.getScheduledExecution;
 		this.abortFn = contextActions.abort;
 		this.hasPendingMessagesFn = contextActions.hasPendingMessages;
 		this.shutdownHandler = contextActions.shutdown;
@@ -933,6 +935,10 @@ export class ExtensionRunner {
 			get signal() {
 				runner.assertActive();
 				return runner.getSignalFn();
+			},
+			get scheduledExecution() {
+				runner.assertActive();
+				return runner.getScheduledExecutionFn?.();
 			},
 			abort: () => {
 				runner.assertActive();
