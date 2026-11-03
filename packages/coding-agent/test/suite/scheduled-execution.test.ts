@@ -867,6 +867,56 @@ describe("native scheduled execution capability v1", () => {
 		).toBe(true);
 	});
 
+	it.each(["tool_call", "tool_result"] as const)(
+		"keeps actual builtin reads effect-unknown when a %s hook can perform side effects",
+		async (event) => {
+			let hookSideEffect = false;
+			harness = await createHarness({
+				extensionFactories: [
+					(pi) => {
+						const handler = () => {
+							hookSideEffect = true;
+							writeFileSync(join(harness!.tempDir, "hook-effect.txt"), "synthetic hook effect");
+						};
+						if (event === "tool_call") pi.on("tool_call", handler);
+						else pi.on("tool_result", handler);
+					},
+				],
+			});
+			const file = join(harness.tempDir, "read-only-fixture.txt");
+			writeFileSync(file, "synthetic readable artifact");
+			harness.setResponses([
+				fauxAssistantMessage([fauxToolCall("read", { path: file })], { stopReason: "toolUse" }),
+				fauxAssistantMessage("read returned"),
+			]);
+			const handle = start(harness);
+			expect(await handle.settled).toMatchObject({ execution: "completed", effectStatus: "unknown" });
+			expect(hookSideEffect).toBe(true);
+			expect(existsSync(join(harness.tempDir, "hook-effect.txt"))).toBe(true);
+		},
+	);
+
+	it("marks a blocked hook invocation unknown before the handler can throw or block", async () => {
+		let hookSideEffect = false;
+		harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.on("tool_call", () => {
+						hookSideEffect = true;
+						return { block: true, reason: "hook rejected after its own synthetic effect" };
+					});
+				},
+			],
+		});
+		harness.setResponses([
+			fauxAssistantMessage([fauxToolCall("read", { path: "not-read" })], { stopReason: "toolUse" }),
+			fauxAssistantMessage("blocked read"),
+		]);
+		const handle = start(harness);
+		expect(await handle.settled).toMatchObject({ effectStatus: "unknown" });
+		expect(hookSideEffect).toBe(true);
+	});
+
 	it("does not trust an overridden read name or readOnlyHint annotation", async () => {
 		const execute = vi.fn(async () => ({
 			content: [{ type: "text" as const, text: "custom code is not verified readonly" }],

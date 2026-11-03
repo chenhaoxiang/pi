@@ -781,6 +781,10 @@ export class AgentSession {
 					"Scheduled run is draining/cancelling; this operation was not executed. Native checkpoint access remains available.",
 			};
 		const runner = this._extensionRunner;
+		const hasToolLifecycleHook = runner.hasHandlers("tool_call") || runner.hasHandlers("tool_result");
+		// A lifecycle hook runs before/after the native tool and may itself perform an external effect.
+		// Mark the scheduled run unknown before entering it; builtin identity is safe only with no hooks.
+		if (this._scheduledExecution.active && hasToolLifecycleHook) this._scheduledExecution.recordToolStart("unknown");
 		if (!runner.hasHandlers("tool_call")) {
 			if (this._scheduledExecution.active)
 				this._scheduledExecution.recordToolStart(
@@ -836,6 +840,9 @@ export class AgentSession {
 		parentToolCallId?: string,
 	): Promise<AfterToolCallResult | undefined> {
 		const runner = this._extensionRunner;
+		// A result hook may have been attached while an asynchronous native read was in flight.
+		if (this._scheduledExecution.active && runner.hasHandlers("tool_result"))
+			this._scheduledExecution.recordToolStart("unknown");
 		const hookResult = runner.hasHandlers("tool_result")
 			? await runner.emitToolResult({
 					type: "tool_result",
