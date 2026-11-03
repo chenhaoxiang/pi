@@ -13,6 +13,8 @@ const openAIExplicitRetryMessage =
 	"An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID req_******** in your message.";
 const bedrockExplicitRetryMessage =
 	'{"message":"The system encountered an unexpected error during processing. Try your request again."}';
+const openAIRateLimitMessage =
+	"Error: Rate limit reached for gpt-6.1-sol in organization org_test on tokens per min (TPM): Limit 1000000, Used 667065, Requested 416459. Please try again in 5.011s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase your rate limit by adding a payment method to your account at https://platform.openai.com/account/billing.";
 const nvidiaNIMResourceExhaustedMessage = "ResourceExhausted: Worker local total request limit reached (288/48)";
 const bunFetchSocketClosedMessage =
 	"The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()";
@@ -117,6 +119,36 @@ describe("provider retry classification", () => {
 		expect(
 			isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage: azurePeakLoadError })),
 		).toBe(true);
+	});
+
+	it.each([
+		["OpenAI TPM", openAIRateLimitMessage],
+		["OpenAI RPM", openAIRateLimitMessage.replace("tokens per min (TPM)", "requests per min (RPM)")],
+		[
+			"JSON-wrapped OpenAI",
+			JSON.stringify({ error: { message: openAIRateLimitMessage, code: "rate_limit_exceeded" } }),
+		],
+		["uppercase help URL", "429 too many requests; see HTTPS://EXAMPLE.COM/BILLING"],
+		["transport endpoint", "request to https://billing.example.com/token failed, reason:"],
+	])("retries %s errors without treating URLs as billing exhaustion", (_label, errorMessage) => {
+		expect(isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage }))).toBe(true);
+	});
+
+	it.each([
+		"429 billing exhausted; see https://example.com/help",
+		`${openAIRateLimitMessage} insufficient_quota`,
+		'429 {"url":"https://example.com/help","code":"insufficient_quota"}',
+		"429 {'url':'https://example.com/help','message':'billing exhausted'}",
+		'429 {"url":"https://example.com/help","code":1308}',
+	])("keeps real account limits terminal alongside URLs: %s", (errorMessage) => {
+		expect(isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage }))).toBe(false);
+	});
+
+	it.each([
+		"400 invalid request; see https://example.com/account/rate-limits",
+		'401 {"url":"https://example.com/help/503","code":"invalid_api_key"}',
+	])("does not infer transient failure from a URL: %s", (errorMessage) => {
+		expect(isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage }))).toBe(false);
 	});
 
 	it("keeps provider limit errors non-retryable", () => {
@@ -238,6 +270,22 @@ describe("retryAssistantCall", () => {
 		expect(produce).toHaveBeenCalledTimes(1);
 		expect(onRetryScheduled).not.toHaveBeenCalled();
 		expect(onRetryFinished).not.toHaveBeenCalled();
+	});
+
+	it("recovers from an OpenAI rate limit with billing guidance through the configured retry policy", async () => {
+		const produce = vi
+			.fn()
+			.mockResolvedValueOnce(fauxAssistantMessage("", { stopReason: "error", errorMessage: openAIRateLimitMessage }))
+			.mockResolvedValueOnce(fauxAssistantMessage("recovered"));
+		const onRetryScheduled = vi.fn();
+		const onRetryFinished = vi.fn();
+
+		const response = await retryAssistantCall(produce, enabled, undefined, { onRetryScheduled, onRetryFinished });
+
+		expect(response.content).toEqual([{ type: "text", text: "recovered" }]);
+		expect(produce).toHaveBeenCalledTimes(2);
+		expect(onRetryScheduled).toHaveBeenCalledWith(1, enabled.maxRetries, 0, openAIRateLimitMessage);
+		expect(onRetryFinished).toHaveBeenCalledWith(true, 1);
 	});
 
 	it("retries a transient error up to maxRetries then returns the final error", async () => {
