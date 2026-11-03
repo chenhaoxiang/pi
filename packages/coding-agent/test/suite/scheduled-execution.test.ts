@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
@@ -844,6 +844,94 @@ describe("native scheduled execution capability v1", () => {
 				.getEntries()
 				.some((entry) => entry.type === "custom" && entry.customType === SCHEDULED_RECEIPT_ENTRY),
 		).toBe(false);
+	});
+
+	it("classifies only the actual shipped builtin read implementation as free of unknown write effects", async () => {
+		harness = await createHarness();
+		const file = join(harness.tempDir, "read-only-fixture.txt");
+		writeFileSync(file, "synthetic readable artifact");
+		harness.setResponses([
+			fauxAssistantMessage([fauxToolCall("read", { path: file })], { stopReason: "toolUse" }),
+			fauxAssistantMessage("read returned"),
+		]);
+		const handle = start(harness);
+		expect(await handle.settled).toMatchObject({
+			execution: "completed",
+			effectStatus: "none-observed",
+			businessOutcome: "unverified",
+		});
+		expect(
+			harness.session.messages.some(
+				(message) => message.role === "toolResult" && message.toolName === "read" && !message.isError,
+			),
+		).toBe(true);
+	});
+
+	it("does not trust an overridden read name or readOnlyHint annotation", async () => {
+		const execute = vi.fn(async () => ({
+			content: [{ type: "text" as const, text: "custom code is not verified readonly" }],
+			details: {},
+		}));
+		harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.registerTool({
+						name: "read",
+						label: "read",
+						description: "custom read",
+						parameters: Type.Object({}),
+						annotations: { readOnlyHint: true },
+						execute,
+					});
+				},
+			],
+		});
+		harness.setResponses([
+			fauxAssistantMessage([fauxToolCall("read", {})], { stopReason: "toolUse" }),
+			fauxAssistantMessage("custom returned"),
+		]);
+		const handle = start(harness);
+		expect(await handle.settled).toMatchObject({ execution: "completed", effectStatus: "unknown" });
+		expect(execute).toHaveBeenCalledOnce();
+	});
+
+	it("detects an SDK executable replacement even if the old builtin declaration stays registered", async () => {
+		harness = await createHarness();
+		const replacement = vi.fn(async () => ({
+			content: [{ type: "text" as const, text: "unverified replacement" }],
+			details: {},
+		}));
+		harness.setResponses([
+			() => {
+				const read = harness!.session.agent.state.tools.find((tool) => tool.name === "read");
+				if (!read) throw new Error("No builtin declaration");
+				read.execute = replacement;
+				return fauxAssistantMessage([fauxToolCall("read", { path: "synthetic-not-read" })], {
+					stopReason: "toolUse",
+				});
+			},
+			fauxAssistantMessage("replacement returned"),
+		]);
+		const handle = start(harness);
+		expect(await handle.settled).toMatchObject({ execution: "completed", effectStatus: "unknown" });
+		expect(replacement).toHaveBeenCalledOnce();
+	});
+
+	it("does not treat an SDK baseToolsOverride as a shipped builtin implementation", async () => {
+		const execute = vi.fn(async () => ({
+			content: [{ type: "text" as const, text: "unverified SDK base tool" }],
+			details: {},
+		}));
+		harness = await createHarness({
+			tools: [{ name: "read", label: "read", description: "SDK replacement", parameters: Type.Object({}), execute }],
+		});
+		harness.setResponses([
+			fauxAssistantMessage([fauxToolCall("read", {})], { stopReason: "toolUse" }),
+			fauxAssistantMessage("replacement returned"),
+		]);
+		const handle = start(harness);
+		expect(await handle.settled).toMatchObject({ execution: "completed", effectStatus: "unknown" });
+		expect(execute).toHaveBeenCalledOnce();
 	});
 
 	it("does not admit a replacement when durable checkpoint persistence failed", async () => {

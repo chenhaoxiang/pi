@@ -501,6 +501,10 @@ export class AgentSession {
 	/** Declared tools whose declarations requests leave out, from `prepareLoadout` hooks. */
 	private _hiddenDeclarations: ReadonlySet<string> = new Set();
 	private _toolDefinitions: Map<string, ToolDefinitionEntry> = new Map();
+	private _readOnlyBuiltins = new Map<
+		string,
+		{ definition: ToolDefinition["execute"]; executable?: AgentTool["execute"] }
+	>();
 	private _toolPromptSnippets: Map<string, string> = new Map();
 	private _toolPromptGuidelines: Map<string, string[]> = new Map();
 
@@ -766,7 +770,7 @@ export class AgentSession {
 
 	/** `tool_call` handlers. `parentToolCallId` is set for calls another tool made. */
 	private async _beforeToolCall(
-		{ toolCall, args }: BeforeToolCallContext,
+		{ toolCall, args, context }: BeforeToolCallContext,
 		parentToolCallId?: string,
 	): Promise<BeforeToolCallResult | undefined> {
 		if (this._scheduledExecution.shouldStop)
@@ -778,7 +782,10 @@ export class AgentSession {
 			};
 		const runner = this._extensionRunner;
 		if (!runner.hasHandlers("tool_call")) {
-			this._scheduledExecution.recordToolStart();
+			if (this._scheduledExecution.active)
+				this._scheduledExecution.recordToolStart(
+					this._verifiedReadOnlyBuiltin(toolCall.name, context) ? "read-only" : "unknown",
+				);
 			return undefined;
 		}
 
@@ -796,7 +803,10 @@ export class AgentSession {
 					terminate: true,
 					reason: "Scheduled run stopped during tool preflight; operation not executed",
 				};
-			if (!decision?.block) this._scheduledExecution.recordToolStart();
+			if (!decision?.block && this._scheduledExecution.active)
+				this._scheduledExecution.recordToolStart(
+					this._verifiedReadOnlyBuiltin(toolCall.name, context) ? "read-only" : "unknown",
+				);
 			return decision;
 		} catch (err) {
 			if (err instanceof Error) {
@@ -804,6 +814,20 @@ export class AgentSession {
 			}
 			throw new Error(`Extension failed, blocking execution: ${String(err)}`);
 		}
+	}
+
+	private _verifiedReadOnlyBuiltin(name: string, context: AgentContext): boolean {
+		const origin = this._readOnlyBuiltins.get(name);
+		if (!origin?.executable) return false;
+		const registered = this._toolDefinitions.get(name);
+		const executable = context.tools?.find((tool) => tool.name === name)?.execute;
+		return (
+			!!origin?.executable &&
+			executable === origin.executable &&
+			registered?.definition.execute === origin.definition &&
+			registered.sourceInfo.source === "builtin" &&
+			registered.sourceInfo.path === `${BUILTIN_PATH_PREFIX}${name}`
+		);
 	}
 
 	/** `tool_result` handlers and image normalization. `parentToolCallId` is set for calls another tool made. */
@@ -3844,6 +3868,13 @@ export class AgentSession {
 			toolRegistry.set(tool.name, tool);
 		}
 		this._toolRegistry = toolRegistry;
+		for (const [name, origin] of this._readOnlyBuiltins) {
+			const entry = definitionRegistry.get(name);
+			origin.executable =
+				entry?.sourceInfo.source === "builtin" && entry.definition.execute === origin.definition
+					? toolRegistry.get(name)?.execute
+					: undefined;
+		}
 
 		const nextActiveToolNames = (
 			options?.activeToolNames ? [...options.activeToolNames] : [...previousActiveToolNames]
@@ -3908,6 +3939,13 @@ export class AgentSession {
 		this._baseToolDefinitions = new Map(
 			Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
 		);
+		this._readOnlyBuiltins.clear();
+		if (!this._baseToolsOverride) {
+			for (const name of ["read", "grep", "find", "ls"]) {
+				const definition = this._baseToolDefinitions.get(name);
+				if (definition) this._readOnlyBuiltins.set(name, { definition: definition.execute });
+			}
+		}
 
 		const extensionsResult = this._resourceLoader.getExtensions();
 		if (options.flagValues) {

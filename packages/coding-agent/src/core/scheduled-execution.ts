@@ -146,7 +146,7 @@ interface RunState {
 	retryNotBefore?: number;
 	results: ScheduledResultReference[];
 	resultCount: number;
-	startedTool: boolean;
+	unknownToolEffect: boolean;
 	declarations: ScheduledCheckpointDeclaration;
 	checkpointEntryId?: string;
 	lastStopReason?: AssistantMessage["stopReason"];
@@ -196,7 +196,7 @@ export class ScheduledExecutionController implements ScheduledExecutionCapabilit
 			providerPhase: "unknown",
 			results: [],
 			resultCount: 0,
-			startedTool: false,
+			unknownToolEffect: false,
 			declarations: {},
 			resolve,
 			handle: {
@@ -337,7 +337,8 @@ export class ScheduledExecutionController implements ScheduledExecutionCapabilit
 			completedResultCount: run.resultCount,
 			lastResultEntryId: run.results.at(-1)?.entryId,
 			declarations: structuredClone(run.declarations),
-			effectStatus: run.startedTool || (run.declarations.effects?.length ?? 0) > 0 ? "unknown" : "none-observed",
+			effectStatus:
+				run.unknownToolEffect || (run.declarations.effects?.length ?? 0) > 0 ? "unknown" : "none-observed",
 			businessOutcome: "unverified",
 		};
 		run.checkpointEntryId = this.host.persist(SCHEDULED_CHECKPOINT_ENTRY, checkpoint);
@@ -353,9 +354,9 @@ export class ScheduledExecutionController implements ScheduledExecutionCapabilit
 		if (run.results.length > 256) run.results.shift();
 	}
 
-	/** Record execution, not business progress or evidence that a tool was effect-free. */
-	recordToolStart(): void {
-		if (this.run) this.run.startedTool = true;
+	/** Only native verified implementation identity may classify read-only; names/annotations/declarations cannot. */
+	recordToolStart(effect: "read-only" | "unknown" = "unknown"): void {
+		if (this.run && effect === "unknown") this.run.unknownToolEffect = true;
 	}
 	recordAssistant(message: AssistantMessage): void {
 		if (this.run) this.run.lastStopReason = message.stopReason;
@@ -458,7 +459,8 @@ export class ScheduledExecutionController implements ScheduledExecutionCapabilit
 				execution,
 				reason: failureReason ?? run.reason ?? (run.ownedFailure ? "owned_handle_failed" : undefined),
 				checkpointEntryId,
-				effectStatus: run.startedTool || (run.declarations.effects?.length ?? 0) > 0 ? "unknown" : "none-observed",
+				effectStatus:
+					run.unknownToolEffect || (run.declarations.effects?.length ?? 0) > 0 ? "unknown" : "none-observed",
 				businessOutcome: "unverified",
 				failedRecoveryMs: run.failedRecoveryMs,
 				retryNotBefore: run.retryNotBefore === undefined ? undefined : new Date(run.retryNotBefore).toISOString(),
