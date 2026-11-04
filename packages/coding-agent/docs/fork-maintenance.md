@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.2` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.3` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 11 public workspace packages share `1.5.0-fork.2`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 11 public workspace packages share `1.5.0-fork.3`. This source revision adds the run-scoped scheduled execution capability below; release publication, installed payloads and loaded sessions remain separate evidence. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
@@ -46,6 +46,12 @@ Codex requests now use a separate pre-response deadline, defaulting to 120 secon
 Agent retries default to 600 attempts, excluding the initial request. At the default `baseDelayMs: 1000`, intervals are 1, 3, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 26, 30, 35, 40, 50, 60, 70, 80, 90, then 100 seconds; later intervals stay at 100 seconds. `maxAgentDelayMs` defaults to 100000. A consecutive-equivalent-error circuit breaker defaults to 12 failures (the first failed attempt counts) and stops a persistent identical outage before the 600-attempt budget spins; set `retry.maxConsecutiveSameErrorRetries` to `0` only when that guard is deliberately not wanted. The shared helper also applies to compaction and branch-summary retries. Existing explicit settings override defaults; no installation step should silently rewrite provider/model or retry settings. See [settings](settings.md#network-and-retries).
 
 Success, cancellation and non-retryable error handling are unchanged. The complete 600-retry success/exhaustion paths and cancellation during a 100-second sleep are covered by faux-provider tests with virtual time; no paid provider calls are needed. These tests prove local behavior, not upstream availability. Source merge, immutable Release publication, fresh-download checksum validation and installed loading remain separate acceptance steps.
+
+## Native scheduled execution candidate
+
+The additive `session.scheduledExecution` / optional `ctx.scheduledExecution` capability v1 binds one scheduled custom turn to exact job/attempt/session/epoch/revision metadata. It applies finite run-only retry/elapsed budgets, native safe-boundary checkpoints and acknowledged closure without changing global retry settings or requiring a successful final model summary. Cancellation keeps ownership until native tools and explicitly owned handles actually close; persistence failure holds attention rather than authorizing replay. Existing `ctx.abort(): void` and ordinary interactive work remain separate. See [SDK contract](sdk.md#native-scheduled-custom-turns).
+
+This is a source/synthetic capability slice of the Schedule-owned `resilient-serial-scheduling` Change, not evidence that new releases, loaded sessions, schema4 migration or natural/business acceptance are complete. Do not enable a resilient Schedule job on an unsupported host or force-reload an active session.
 
 ## Validation
 

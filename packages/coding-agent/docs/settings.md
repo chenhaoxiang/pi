@@ -139,6 +139,8 @@ With the default base delay, agent-level retry intervals are 1, 3, 5, 6, 8, 10, 
 
 Keep `retry.provider.maxRetries` at `0` unless provider-level retries are required. Provider retries can delay Pi from handling quota and usage-limit errors itself.
 
+An explicitly accepted [native scheduled custom turn](sdk.md#native-scheduled-custom-turns) uses its own finite policy: at most three additional response retries, three equivalent failures including the initial response, and a default five-minute cumulative failed-call/retry-wait budget. Its soft/hard elapsed budgets are supplied by the scheduler, not inferred from interval/cron cadence. The policy ends with that exact run; provider retries are forced to zero only for its requests. It never rewrites the global settings above, including an explicitly disabled global equivalent-error circuit. Ordinary prompts and separately queued user turns retain their existing settings. No global scheduled-profile setting is introduced.
+
 ## Shell
 
 | Setting | Type | Default | Description |

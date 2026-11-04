@@ -1170,20 +1170,24 @@ export class SessionManager {
 		);
 	}
 
+	/** Materialize buffered entries without inventing a user/assistant message. In-memory sessions remain in memory. */
+	flush(): void {
+		if (!this.persist || !this.sessionFile || this.flushed) return;
+		const fd = openSync(this.sessionFile, "wx");
+		try {
+			for (const entry of this.fileEntries) writeFileSync(fd, `${JSON.stringify(entry)}\n`);
+		} finally {
+			closeSync(fd);
+		}
+		this.flushed = true;
+	}
+
 	_persist(entry: SessionEntry): void {
 		if (!this.persist || !this.sessionFile) return;
 
 		if (!this.flushed) {
 			if (!this._hasConversation()) return;
-			const fd = openSync(this.sessionFile, "wx");
-			try {
-				for (const e of this.fileEntries) {
-					writeFileSync(fd, `${JSON.stringify(e)}\n`);
-				}
-			} finally {
-				closeSync(fd);
-			}
-			this.flushed = true;
+			this.flush();
 		} else {
 			appendFileSync(this.sessionFile, `${JSON.stringify(entry)}\n`);
 		}

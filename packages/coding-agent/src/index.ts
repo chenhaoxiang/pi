@@ -248,6 +248,22 @@ export type {
 export { DefaultPackageManager } from "./core/package-manager.ts";
 export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
 export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
+export type {
+	ScheduledCheckpointDeclaration,
+	ScheduledExecutionCapability,
+	ScheduledExecutionRequest,
+	ScheduledResultReference,
+	ScheduledRunBinding,
+	ScheduledRunCheckpoint,
+	ScheduledRunHandle,
+	ScheduledRunId,
+	ScheduledRunPhase,
+	ScheduledRunPolicy,
+	ScheduledRunReceipt,
+	ScheduledRunSnapshot,
+} from "./core/scheduled-execution.ts";
+// Native scheduled custom turns (additive capability v1).
+export { SCHEDULED_CHECKPOINT_ENTRY, SCHEDULED_RECEIPT_ENTRY } from "./core/scheduled-execution.ts";
 // SDK for programmatic usage
 export {
 	AgentSessionRuntime,

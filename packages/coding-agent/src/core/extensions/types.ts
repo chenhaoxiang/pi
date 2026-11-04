@@ -69,6 +69,7 @@ import type { McpServerConfig, McpServerRegistry, RegisteredMcpServer } from "..
 import type { CustomMessage } from "../messages.ts";
 import type { ModelRegistry } from "../model-registry.ts";
 import type { ScopedModel } from "../model-resolver.ts";
+import type { ScheduledExecutionCapability } from "../scheduled-execution.ts";
 import type {
 	BranchSummaryEntry,
 	CompactionEntry,
@@ -370,7 +371,9 @@ export interface ExtensionContext {
 	isProjectTrusted(): boolean;
 	/** The current abort signal, or undefined when the agent is not streaming. */
 	signal: AbortSignal | undefined;
-	/** Abort the current agent operation */
+	/** Additive native scheduled-run control. Older hosts may omit this capability. */
+	readonly scheduledExecution?: ScheduledExecutionCapability;
+	/** Abort the current agent operation; this legacy method is not an exit acknowledgement. */
 	abort(): void;
 	/** Whether there are queued messages waiting */
 	hasPendingMessages(): boolean;
@@ -2238,6 +2241,7 @@ export interface ExtensionContextActions {
 	isIdle: () => boolean;
 	isProjectTrusted: () => boolean;
 	getSignal: () => AbortSignal | undefined;
+	getScheduledExecution?: () => ScheduledExecutionCapability | undefined;
 	abort: () => void;
 	hasPendingMessages: () => boolean;
 	shutdown: () => void;
