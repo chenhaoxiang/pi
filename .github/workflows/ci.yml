@@ -58,7 +58,12 @@ jobs:
         run: npm run build:daemon --workspace packages/env
 
       - name: Test
-        run: npm test
+        run: |
+          if [ "$GITHUB_REPOSITORY" = "chenhaoxiang/pi" ]; then
+            ./test.sh
+          else
+            npm test
+          fi
 
   mcp-conformance:
     runs-on: ubuntu-latest

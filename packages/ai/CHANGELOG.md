@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.5.0-fork.2] - 2026-11-04
+
+### Fixed
+
+- Fixed transient TPM/RPM rate limits being treated as terminal billing errors when their diagnostics contain billing help URLs. URL contents no longer supply retry-classification keywords; actual account limits and original diagnostics are preserved.
+
 ## [1.5.0] - 2026-11-02
 
 ### Breaking Changes

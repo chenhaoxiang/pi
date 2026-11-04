@@ -306,7 +306,9 @@ export async function retryAssistantCall(
  */
 export function isRetryableAssistantError(message: AssistantMessage): boolean {
 	if (message.stopReason !== "error" || !message.errorMessage) return false;
-	const errorMessage = message.errorMessage;
+	// Help URLs such as /account/billing are not error semantics. Keep a nonempty marker
+	// so transport wording like "request to <url> failed, reason:" remains recognizable.
+	const errorMessage = message.errorMessage.replace(/\b(?:https?|wss?):\/\/[^\s<>"')]+/gi, "<url>");
 	if (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(errorMessage)) return false;
 	return RETRYABLE_PROVIDER_ERROR_PATTERN.test(errorMessage);
 }

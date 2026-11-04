@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.5.0-fork.2] - 2026-11-04
+
+### Fixed
+
+- Fixed automatic retry being skipped for transient TPM/RPM rate limits whose help links contain `billing`. Existing retry budgets, stepped backoff, cancellation and account-limit exclusions are unchanged.
+
 ## [1.5.0] - 2026-11-02
 
 ### New Features
