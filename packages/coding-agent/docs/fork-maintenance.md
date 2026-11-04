@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.2` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.3` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 11 public workspace packages share `1.5.0-fork.2`. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 11 public workspace packages share `1.5.0-fork.3`. This source revision adds the run-scoped scheduled execution capability below; release publication, installed payloads and loaded sessions remain separate evidence. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 

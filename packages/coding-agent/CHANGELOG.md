@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added native scheduled execution capability v1 with exact run identity, finite per-run retry/elapsed budgets, completed-result checkpoints and acknowledged resource closure. Ordinary user retry settings and `ctx.abort()` remain unchanged; consumers must negotiate the capability before admission.
+
 ## [1.5.0-fork.2] - 2026-11-04
 
 ### Fixed
