@@ -6,6 +6,10 @@
 
 - Added native scheduled execution capability v1 with exact run identity, finite per-run retry/elapsed budgets, completed-result checkpoints and acknowledged resource closure. Ordinary user retry settings and `ctx.abort()` remain unchanged; consumers must negotiate the capability before admission.
 
+### Fixed
+
+- Add native unattended-input guard negotiation to scheduled capability v1. Exact scheduled direct/nested/late-registered questions checkpoint and drain before tool hooks or UI; ordinary questions and arbitrary lifecycle-hook UNKNOWN protection remain unchanged.
+
 ## [1.5.0-fork.2] - 2026-11-04
 
 ### Fixed

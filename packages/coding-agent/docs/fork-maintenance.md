@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-11-04
+updated: 2026-11-05
 ssot: true
 owner: chx
 ---
@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.3` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.4` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 11 public workspace packages share `1.5.0-fork.3`. This source revision adds the run-scoped scheduled execution capability below; release publication, installed payloads and loaded sessions remain separate evidence. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 11 public workspace packages share `1.5.0-fork.4`. This source revision adds the run-scoped scheduled execution capability below; release publication, installed payloads and loaded sessions remain separate evidence. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
@@ -47,9 +47,11 @@ Agent retries default to 600 attempts, excluding the initial request. At the def
 
 Success, cancellation and non-retryable error handling are unchanged. The complete 600-retry success/exhaustion paths and cancellation during a 100-second sleep are covered by faux-provider tests with virtual time; no paid provider calls are needed. These tests prove local behavior, not upstream availability. Source merge, immutable Release publication, fresh-download checksum validation and installed loading remain separate acceptance steps.
 
-## Native scheduled execution candidate
+## Native scheduled execution
 
 The additive `session.scheduledExecution` / optional `ctx.scheduledExecution` capability v1 binds one scheduled custom turn to exact job/attempt/session/epoch/revision metadata. It applies finite run-only retry/elapsed budgets, native safe-boundary checkpoints and acknowledged closure without changing global retry settings or requiring a successful final model summary. Cancellation keeps ownership until native tools and explicitly owned handles actually close; persistence failure holds attention rather than authorizing replay. Existing `ctx.abort(): void` and ordinary interactive work remain separate. See [SDK contract](sdk.md#native-scheduled-custom-turns).
+
+The additive `unattendedInputGuardVersion=1` lets the exact native run protect direct/nested/late-registered questions before extension tool hooks. A cooperating scheduler can detach only its own legacy guard while that exact capability owns the turn, avoiding false hook effects on builtin reads without exempting arbitrary third-party callbacks. Missing capability or uncertain identity retains the legacy guard.
 
 This is a source/synthetic capability slice of the Schedule-owned `resilient-serial-scheduling` Change, not evidence that new releases, loaded sessions, schema4 migration or natural/business acceptance are complete. Do not enable a resilient Schedule job on an unsupported host or force-reload an active session.
 
