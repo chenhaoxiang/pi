@@ -775,6 +775,8 @@ export class AgentSession {
 		{ toolCall, args, context }: BeforeToolCallContext,
 		parentToolCallId?: string,
 	): Promise<BeforeToolCallResult | undefined> {
+		const inputBlocked = this._scheduledExecution.guardUnattendedInput(toolCall.name, toolCall.id);
+		if (inputBlocked) return inputBlocked;
 		if (this._scheduledExecution.shouldStop)
 			return {
 				block: true,

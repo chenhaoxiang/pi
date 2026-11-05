@@ -1258,6 +1258,8 @@ Control flow helpers. `ctx.isIdle()` is false while Pi is processing an agent ru
 
 New hosts expose the native scheduled custom-turn capability as `ctx.scheduledExecution`. Check `version === 1` before resilient admission; a missing capability is unsupported, not permission to fall back to `ctx.abort()`. The same object is available to SDK consumers through `session.scheduledExecution`; see [Native scheduled custom turns](sdk.md#native-scheduled-custom-turns) for its exact binding, policy, handle and checkpoint contract.
 
+`unattendedInputGuardVersion === 1` additionally guarantees that native preflight blocks unattended questions before extension tool hooks, including calls registered during the run or reached through nested execution. Negotiate the actual property before removing a legacy guard; missing support is not permission to assume safety. The guard does not declare third-party hooks or arbitrary writes read-only.
+
 `active?.checkpoint({ nextAction, waitingReason, artifacts, effects })` is a local metadata operation, including while draining. References/hashes and effect declarations remain unverified; actual completed result IDs come from the native session, not tool arguments. Draining still denies new direct/nested tools and arbitrary shell/codemode wrappers; a checkpoint never grants permission to bypass another tool guard.
 
 `active?.requestCancel()` only requests cancellation. Await that handle's `settled` promise outside the active tool/event before treating the owned execution as closed; awaiting it inside its own run would deadlock. Slow tools and explicitly owned child handles retain the slot. The existing `ctx.abort(): void` method remains unchanged and is not a cancellation acknowledgement.

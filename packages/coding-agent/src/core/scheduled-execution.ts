@@ -108,6 +108,8 @@ export interface ScheduledExecutionRequest {
 /** An additive capability. Absence or a different version must be refused before resilient admission. */
 export interface ScheduledExecutionCapability {
 	readonly version: 1;
+	/** Native preflight blocks unattended questions, including nested and late-registered tools. */
+	readonly unattendedInputGuardVersion?: 1;
 	readonly active: ScheduledRunHandle | undefined;
 	start(
 		request: ScheduledExecutionRequest,
@@ -156,6 +158,7 @@ interface RunState {
 /** Session-owned bookkeeping behind the native capability; AgentSession alone drives execution/settlement. */
 export class ScheduledExecutionController implements ScheduledExecutionCapability {
 	readonly version = 1;
+	readonly unattendedInputGuardVersion = 1;
 	private host: ScheduledExecutionHost;
 	private run?: RunState;
 	private disposed = false;
@@ -352,6 +355,26 @@ export class ScheduledExecutionController implements ScheduledExecutionCapabilit
 		run.results.push(result);
 		run.resultCount++;
 		if (run.results.length > 256) run.results.shift();
+	}
+
+	/** Block input before any extension hook/tool can open UI; ordinary user turns are unchanged. */
+	guardUnattendedInput(
+		toolName: string,
+		toolCallId: string,
+	): { block: true; terminate: true; reason: string } | undefined {
+		const run = this.run;
+		if (!run || run.phase !== "running" || toolName !== "ask_user_question") return undefined;
+		this.checkpoint(run, {
+			waitingReason: "user_input_required",
+			nextAction: `Wait for required input; blocked call ${toolCallId}`,
+		});
+		this.drain(run, "user_input_required");
+		return {
+			block: true,
+			terminate: true,
+			reason:
+				"No question was shown and no answer was obtained. This unattended native scheduled run cannot wait for user input. Completed results were checkpointed; finish at this safe boundary without replay or an extra summary request.",
+		};
 	}
 
 	/** Only native verified implementation identity may classify read-only; names/annotations/declarations cannot. */
