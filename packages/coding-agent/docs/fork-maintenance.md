@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-11-05
+updated: 2026-11-10
 ssot: true
 owner: chx
 ---
@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The `1.5.0-fork.4` source integrates exact community tag `v1.5.0`, commit `f9a26365568127461c47a07a37dcb42c140a3ac5`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.5.2-fork.1` source candidate integrates exact community tag `v1.5.2`, commit `b4afdddf44e059c67ccf5097e5317d913521b470`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 11 public workspace packages share `1.5.0-fork.4`. This source revision adds the run-scoped scheduled execution capability below; release publication, installed payloads and loaded sessions remain separate evidence. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 11 public workspace packages share `1.5.2-fork.1`. This source candidate retains the run-scoped scheduled execution and compaction host contracts; release publication, installed payloads and loaded sessions remain separate evidence. The existing `1.5.0-fork.4` SDK and immutable release assets must remain available. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
@@ -59,14 +59,26 @@ This is a source/synthetic capability slice of the Schedule-owned `resilient-ser
 
 1. Hydrate public model catalog data using the versioned source generator, then run `npm run check` and `npm run build:offline`. No handwritten generated-model changes or dependency upgrades are needed.
 2. Build the environment daemon with `npm run build:daemon --workspace packages/env` before the full suite.
-3. Run `./test.sh` with an independent temporary root outside source/package resolution and daily project configuration ancestry. The wrapper starts with an empty environment, synthetic HOME and no provider credentials. It bounds Vitest to two workers to keep native filesystem watcher timing predictable under load. Never weaken assertions to accommodate a polluted fixture root.
+3. Run `./test.sh` with an independent temporary root outside source/package resolution and daily project configuration ancestry. The wrapper starts with an empty environment, synthetic HOME and no provider credentials. Vitest and Node test runners are bounded to two workers to keep native filesystem watcher timing predictable under load. Never weaken assertions to accommodate a polluted fixture root.
 4. Run new disconnect/classifier, session/tool-recovery and installer-lock regressions, retaining existing tests unchanged.
 5. Build/pack and validate the Node consumer outside the repository. Check both bundled CLI and SDK versions. For the local macOS binary, freshly rebuild compiled assets at the exact clean committed release HEAD, then use `build-binaries.sh --skip-install --skip-build --platform darwin-arm64` and verify startup separately. Record that same-HEAD build command/exit status with the artifact hashes; version metadata alone is not binary-to-source proof.
 6. Review the exact commit and run applicable CI before merge/release. Record platform/request smoke tests separately from provider-free tests; do not infer real long-context reliability from synthetic fixtures.
 
 Fork CI uses the same credential-free `./test.sh` wrapper, including its two-worker bound; community CI retains direct `npm test`. This keeps every test and assertion while avoiding unbounded worker pressure on GC and child-process fixtures.
 
-Fork CI hydrates provider data from the immutable community `v1.5.0` source release asset, verifies SHA-256 `577ace662a466326d1a4b41f813579aeb5957679e796c577bae65820faea5d9a`, and runs `build:offline` plus every existing check and test. This explicit catalog refresh includes the 1.5.0 model metadata; do not retain an older catalog while claiming full 1.5.0 model support. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
+Fork CI hydrates provider data from the immutable community `v1.5.2` source release asset, verifies SHA-256 `da14b72e5d674959b64fc541e4a9241ac9fcdfa243431479119d3edb598b2231`, and runs `build:offline` plus every existing check and test. This explicit catalog refresh includes the 1.5.2 model metadata; do not retain an older catalog while claiming full 1.5.2 model support. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
+
+## 1.5.2 synchronization notes
+
+The candidate merges the exact stable tag into maintenance history (395 community commits since v1.5.0), not unpublished community main. All 11 public packages and internal registry pins use `1.5.2-fork.1`; root and fork-URL installer locks are regenerated. Fork CI retains the protected `build-check-test` and `mcp-conformance` producers rather than splitting the required test producer into optional parallel jobs. No community publication channel is enabled.
+
+Chord v2 moved from `next` / `next-node` to the root / `node` source paths. The stale-lock and protocol-close fixes overlap community equivalents; the fork's pending-discovery/dependency-install protection is combined with upstream file-move rebuild detection. The upstream ordinary-prompt preflight reservation also excludes native scheduled admission until the ordinary prompt releases it. Existing retry, scheduled-input and compaction tests remain authoritative; no installed Schedule/Compaction runtime is changed by this sync.
+
+Undici remains exactly `8.12.3`; no undici update is performed. The catalog is the source-owner-generated v1.5.2 snapshot, not handwritten metadata or a live pricing refresh. Local macOS fixture timing and Node/npm-version validation limits must be recorded with actual commands; Linux exact-head CI is separate from future clean same-HEAD native/Node artifact builds. This stage neither merges the PR nor publishes, installs or activates a runtime.
+
+Local preparation passes `npm run check`, `build:offline`, the two-job daemon build, p2's separate check and 63 focused fork regressions. The first full macOS `./test.sh` attempt is not a pass: it reports Chord filesystem-watch failures and reaches the command's 900-second bound during coding-agent tests. A minimal fresh-directory `fs.watch` probe receives no create/write events on either Node 22.23.2 or 26.13.0 on that host. Node 26/npm 12 additionally fails Chord's git-install and `npm pack --json` fixtures; the unchanged 14-test install file passes on Node 22/npm 10. Keep these limits distinct from exact-head Linux CI and later native acceptance; no assertions are disabled.
+
+The regenerated coding-agent installer lock's audit reports zero findings. The whole workspace audit still reports two high findings through the retained sandbox example's `sandbox-runtime` / nested Zod 3 path (`GHSA-mrhx-c7xc-m3w5`); the advisory offers no patched Zod 3 release. No cross-major override, advisory suppression or claim of a fully remediated sandbox is introduced by this sync.
 
 ## 1.5.0 synchronization notes
 

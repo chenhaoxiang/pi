@@ -14,7 +14,7 @@
 
 ## Maintained fork
 
-This is the maintained `chenhaoxiang/pi` fork of [earendil-works/pi](https://github.com/earendil-works/pi). The **1.5.0-fork.2** source uses the exact community v1.5.0 baseline and retains our bounded Responses disconnect recovery, fork update-channel protection and dependency security fixes. It also fixes transient rate limits being misclassified by billing help URLs. Automatic retries now default to 600 attempts with stepped delays capped at 100 seconds. It does not eliminate upstream disconnects or change model/context limits.
+This is the maintained `chenhaoxiang/pi` fork of [earendil-works/pi](https://github.com/earendil-works/pi). The **1.5.2-fork.1** source candidate uses the exact community v1.5.2 baseline and retains our bounded Responses disconnect recovery, fork update-channel protection and dependency security fixes. It also fixes transient rate limits being misclassified by billing help URLs. Automatic retries default to 600 attempts with stepped delays capped at 100 seconds and an equivalent-error circuit breaker. Native scheduled execution v1, its unattended-input guard v1 and existing compaction extension boundaries are retained. This source candidate does not publish or install a release, replace the existing 1.5.0-fork.4 SDK, or eliminate upstream disconnects.
 
 `main` carries reviewed fork changes; `upstream-main` is the untouched community mirror. Use the pinned assets from [this fork's GitHub Releases](https://github.com/chenhaoxiang/pi/releases), not the community installer/npm commands below, when installing this fork. Community self-update and its banner are disabled for canonical maintained fork versions; extension updates remain separate. See the [maintenance and rollback runbook](packages/coding-agent/docs/fork-maintenance.md).
 
@@ -83,7 +83,7 @@ This monorepo contains the Pi CLI and its supporting libraries.
 
 | Package | Description |
 |---------|-------------|
-| **[@earendil-works/chord](packages/chord)** | Typed host runtime for hot-reloadable plugins, contracts, replicated state, and RPC over JSON links |
+| **[@earendil-works/chord](packages/chord)** | Object runtime for apps across processes: contracts, documents, a store, links, plugins with hot reload, HTTP, workers, web and terminal clients |
 | **[@earendil-works/pi-telemetry](packages/telemetry)** | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas |
 | **[@earendil-works/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
 | **[@earendil-works/pi-durable](packages/durable)** | Durable conversation, task, and document runtime |
@@ -105,7 +105,7 @@ If you need stronger boundaries, containerize or sandbox Pi. See [packages/codin
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.md](AGENTS.md) for project-specific rules (for both humans and agents).  Longer term plans for Pi can also be found in [RFCs](https://rfc.earendil.com/keyword/pi/).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.md](AGENTS.md) for project-specific rules (for both humans and agents).  Longer term plans for Pi can also be found in [RFCs](https://rfc.earendil.com/keyword/pi).
 
 ## Development
 
