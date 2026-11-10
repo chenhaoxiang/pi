@@ -139,6 +139,38 @@ describe("native scheduled execution capability v1", () => {
 		expect(harness.faux.state.callCount).toBe(0);
 	});
 
+	it("refuses scheduled admission while ordinary prompt input preflight owns the context", async () => {
+		const entered = gate();
+		const release = gate();
+		harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.on("input", async () => {
+						entered.resolve();
+						await release.promise;
+						return { action: "continue" };
+					});
+				},
+			],
+		});
+		harness.setResponses([fauxAssistantMessage("ordinary done"), fauxAssistantMessage("scheduled done")]);
+		const ordinary = harness.session.prompt("ordinary fixture");
+		await entered.promise;
+		expect(() => start(harness!)).toThrow("busy");
+		expect(harness.faux.state.callCount).toBe(0);
+		expect(harness.session.scheduledExecution.active).toBeUndefined();
+		expect(
+			harness.sessionManager
+				.getEntries()
+				.some((entry) => entry.type === "custom" && entry.customType === "pi.scheduled-start.v1"),
+		).toBe(false);
+		release.resolve();
+		await ordinary;
+		const handle = start(harness);
+		expect(await handle.settled).toMatchObject({ execution: "completed" });
+		expect(harness.faux.state.callCount).toBe(2);
+	});
+
 	it("bounds a continuous 56-response outage without changing global retry choices", async () => {
 		harness = await createHarness({
 			settings: {
