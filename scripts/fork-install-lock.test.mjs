@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -51,7 +52,14 @@ for (const [version, repository, host] of [
 				assert.equal(entry.version, version);
 				assert.ok(entry.resolved.startsWith(host), path);
 			}
-			assert.equal(lock.packages["node_modules/undici"].resolved, JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8")).packages["node_modules/undici"].resolved);
+			// Another workspace may pin a different Undici; compare the coding-agent consumer, not root hoisting.
+			const agentRequire = createRequire(join(root, "packages/coding-agent/package.json"));
+			const sourcePath = relative(root, dirname(agentRequire.resolve("undici/package.json"))).split(sep).join("/");
+			const source = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8")).packages[sourcePath];
+			const installed = lock.packages["node_modules/@earendil-works/pi-coding-agent/node_modules/undici"] ?? lock.packages["node_modules/undici"];
+			assert.equal(installed.version, source.version);
+			assert.equal(installed.resolved, source.resolved);
+			assert.equal(installed.integrity, source.integrity);
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}

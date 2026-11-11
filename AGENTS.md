@@ -4,7 +4,7 @@
 
 - This repository is `chenhaoxiang/pi`; `earendil-works/pi` remains the community upstream.
 - `main` is the reviewed maintenance branch. `upstream-main` contains only the community tree, with no fork changes. Never force-push either branch or replace maintenance history with the mirror.
-- The `1.5.2-fork.1` source candidate is based on exact community tag `v1.5.2` (`b4afdddf44e059c67ccf5097e5317d913521b470`); source, release and installed acceptance are separate. The 11 public workspace packages, including pi-schema, use lockstep `1.5.2-fork.1` versions. Retain prior fork fixes, security regressions and immutable release history; see the fork maintenance runbook.
+- The `1.5.2-fork.2` source candidate is based on exact community tag `v1.5.2` (`b4afdddf44e059c67ccf5097e5317d913521b470`); source, release and installed acceptance are separate. The 11 public workspace packages, including pi-schema, use lockstep `1.5.2-fork.2` versions. Retain prior fork fixes, security regressions and immutable release history; see the fork maintenance runbook.
 - Fork distributions use immutable GitHub Release assets, source provenance and SHA-256 checksums. Do not publish the community npm identity or write to the community pi.dev/R2 release service.
 - The community release automation below applies only to the community repository. For this fork, use reviewed PRs and the [fork maintenance runbook](packages/coding-agent/docs/fork-maintenance.md).
 - Existing Pi processes are not hot-upgraded by replacing a launcher. Preserve their installation and do not force-restart active sessions.
