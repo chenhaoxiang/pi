@@ -48,9 +48,14 @@ impl Output {
         self.queued.notify_one();
     }
 
-    /// Wait while more than the bulk limit is unsent, unless `stop` is set.
-    pub fn wait_for_room(&self, stop: &AtomicBool) {
+    /// Wait while more than the bulk limit is unsent, unless `stop` is set; notify before a wait and report it.
+    pub fn wait_for_room(&self, stop: &AtomicBool, on_wait: impl FnOnce()) -> bool {
         let mut queues = self.queues.lock().unwrap();
+        let waiting =
+            queues.bulk_bytes > BULK_LIMIT && !queues.closed && !stop.load(Ordering::SeqCst);
+        if waiting {
+            on_wait();
+        }
         while queues.bulk_bytes > BULK_LIMIT && !queues.closed && !stop.load(Ordering::SeqCst) {
             queues = self
                 .drained
@@ -58,6 +63,7 @@ impl Output {
                 .unwrap()
                 .0;
         }
+        waiting
     }
 
     pub fn close(&self) {

@@ -5,11 +5,14 @@ import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 
 const codingAgentPackage = new URL("../packages/coding-agent/package.json", import.meta.url);
 const codingAgentRequire = createRequire(codingAgentPackage);
-const { Agent, cacheStores, fetch, interceptors } = codingAgentRequire("undici");
+// Resolve an explicit npm file: Bun's bare "undici" import is a builtin shim, even with npm installed.
+const undiciEntry = join(dirname(codingAgentRequire.resolve("undici/package.json")), "index.js");
+const { Agent, cacheStores, fetch, interceptors } = codingAgentRequire(undiciEntry);
 
 async function closeServer(server) {
 	server.closeAllConnections();

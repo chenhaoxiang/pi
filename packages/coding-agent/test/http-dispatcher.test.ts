@@ -90,6 +90,15 @@ describe("http dispatcher", () => {
 		vi.restoreAllMocks();
 	});
 
+	it("installs fetch and Web API globals from the same npm Undici as the dispatcher", () => {
+		configureHttpDispatcher();
+
+		expect(globalThis.fetch).toBe(undici.fetch);
+		expect(globalThis.Request).toBe(undici.Request);
+		expect(globalThis.Response).toBe(undici.Response);
+		expect(undici.getGlobalDispatcher()).toBeInstanceOf(undici.EnvHttpProxyAgent);
+	});
+
 	it("tunnels proxied HTTP origins", async () => {
 		const origin = http.createServer((_request, response) => {
 			response.end("origin");

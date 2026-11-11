@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
-import * as undici from "undici";
+// Bun replaces the bare "undici" specifier with its builtin shim, not the pinned npm implementation.
+import * as undici from "undici/index.js";
 
 export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 // Node's 250ms default can terminate valid connection attempts on high-latency routes.
