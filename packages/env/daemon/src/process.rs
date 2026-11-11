@@ -191,6 +191,7 @@ pub fn run(
 
     let names = ["stdout", "stderr"];
     let mut ended = [false, false];
+    let mut paused_readers = 0;
     let mut status: Option<Result<ExitStatus, String>> = None;
     let mut idle_until: Option<Instant> = None;
     let mut aborted = false;
@@ -212,15 +213,10 @@ pub fn run(
         if status.is_some() && ended[0] && ended[1] {
             break;
         }
-        let wait = match idle_until {
-            Some(idle) => {
-                let now = Instant::now();
-                if now >= idle {
-                    // A descendant may hold the pipes open after the program exited; stop waiting for it.
-                    break;
-                }
-                idle - now
-            }
+        let wait = match idle_until
+            .filter(|_| paused_readers == 0 || aborted || !matches!(status, Some(Ok(_))))
+        {
+            Some(idle) => idle.saturating_duration_since(Instant::now()),
             None => Duration::from_secs(3600),
         };
         match receiver.recv_timeout(wait) {
@@ -239,6 +235,14 @@ pub fn run(
                 }
             }
             Ok(Message::Eof(stream)) => ended[stream] = true,
+            Ok(Message::ReaderPaused) => paused_readers += 1,
+            Ok(Message::ReaderResumed) => {
+                paused_readers -= 1;
+                // Link backpressure is not pipe silence: give the reader time to drain after it resumes.
+                if matches!(status, Some(Ok(_))) {
+                    idle_until = Some(Instant::now() + EXIT_STDIO_GRACE);
+                }
+            }
             Ok(Message::Exit(exit)) => {
                 // The waiter already ended the group; nothing is left to kill.
                 killed = true;
@@ -254,7 +258,14 @@ pub fn run(
                 kill(&mut killed);
             }
             Ok(Message::Kill) => kill(&mut killed),
-            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Timeout) => {
+                if (paused_readers == 0 || aborted || !matches!(status, Some(Ok(_))))
+                    && idle_until.is_some_and(|idle| Instant::now() >= idle)
+                {
+                    // A descendant may hold the pipes open after the program exited.
+                    break;
+                }
+            }
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }

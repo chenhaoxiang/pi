@@ -5,7 +5,7 @@
 use crate::errors::Failure;
 use crate::exec::{Control, Groups, running};
 #[cfg(unix)]
-use crate::exec::{Message, kill_group, start_waiter};
+use crate::exec::{Message, kill_group, start_waiter, wait_for_output};
 #[cfg(unix)]
 use crate::frame::{EVENT, Frame};
 use crate::output::Output;
@@ -196,7 +196,7 @@ pub fn run(
             unix::read(&master, &stop, |bytes| {
                 let delivered = sender.send(Message::Data(0, bytes.to_vec())).is_ok();
                 // Like a full pipe: a program that writes faster than the link waits.
-                output.wait_for_room(&stop);
+                wait_for_output(&output, &sender, &stop);
                 delivered
             });
             let _ = sender.send(Message::Eof(0));
@@ -227,6 +227,7 @@ pub fn run(
 
     let mut status = None;
     let mut ended = false;
+    let mut paused_readers = 0;
     let mut idle_until: Option<Instant> = None;
     let mut aborted = false;
     let mut killed = false;
@@ -243,15 +244,10 @@ pub fn run(
         if status.is_some() && ended {
             break;
         }
-        let wait = match idle_until {
-            Some(idle) => {
-                let now = Instant::now();
-                if now >= idle {
-                    // A background job may keep the terminal open after the program exited.
-                    break;
-                }
-                idle - now
-            }
+        let wait = match idle_until
+            .filter(|_| paused_readers == 0 || aborted || !matches!(status, Some(Ok(_))))
+        {
+            Some(idle) => idle.saturating_duration_since(Instant::now()),
             None => Duration::from_secs(3600),
         };
         match receiver.recv_timeout(wait) {
@@ -265,6 +261,14 @@ pub fn run(
                 }
             }
             Ok(Message::Eof(_)) => ended = true,
+            Ok(Message::ReaderPaused) => paused_readers += 1,
+            Ok(Message::ReaderResumed) => {
+                paused_readers -= 1;
+                // Link backpressure is not pipe silence: give the reader time to drain after it resumes.
+                if matches!(status, Some(Ok(_))) {
+                    idle_until = Some(Instant::now() + EXIT_GRACE);
+                }
+            }
             Ok(Message::Exit(exit)) => {
                 status = Some(Ok(exit));
                 idle_until = Some(Instant::now() + EXIT_GRACE);
@@ -278,7 +282,14 @@ pub fn run(
                 kill(&mut killed);
             }
             Ok(Message::Kill) => kill(&mut killed),
-            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Timeout) => {
+                if (paused_readers == 0 || aborted || !matches!(status, Some(Ok(_))))
+                    && idle_until.is_some_and(|idle| Instant::now() >= idle)
+                {
+                    // A background job may keep the terminal open after the program exited.
+                    break;
+                }
+            }
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }

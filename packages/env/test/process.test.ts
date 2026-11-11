@@ -176,6 +176,28 @@ describe("input and output", () => {
 		expect(output.every((byte) => byte === 120)).toBe(true);
 	}, 30_000);
 
+	it("drains all output after exit when the link pauses longer than the pipe-silence grace", async () => {
+		const { connection, cwd } = connect();
+		const sleeper = new Int32Array(new SharedArrayBuffer(4));
+		let received = 0;
+		let unchanged = true;
+		const program = await openProcess(connection, {
+			cwd,
+			argv: node(`process.stdout.write(Buffer.alloc(12 * 1024 * 1024, 120))`),
+			onStdout: (bytes) => {
+				received += bytes.length;
+				unchanged &&= bytes.every((byte) => byte === 120);
+				// Stall the link, not the producer, while the daemon has queued output and the child can exit.
+				if (received >= 7 * 1024 * 1024 && received < 12 * 1024 * 1024) {
+					Atomics.wait(sleeper, 0, 0, 150);
+				}
+			},
+		});
+		expect(await program.exited).toBe(0);
+		expect(received).toBe(12 * 1024 * 1024);
+		expect(unchanged).toBe(true);
+	}, 30_000);
+
 	it("refuses input after stdin was closed while the program keeps running", async () => {
 		const { connection, cwd } = connect();
 		const started = Promise.withResolvers<void>();
