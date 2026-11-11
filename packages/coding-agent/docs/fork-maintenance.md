@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-11-10
+updated: 2026-11-11
 ssot: true
 owner: chx
 ---
@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The `1.5.2-fork.1` source candidate integrates exact community tag `v1.5.2`, commit `b4afdddf44e059c67ccf5097e5317d913521b470`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.5.2-fork.2` source candidate integrates exact community tag `v1.5.2`, commit `b4afdddf44e059c67ccf5097e5317d913521b470`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 11 public workspace packages share `1.5.2-fork.1`. This source candidate retains the run-scoped scheduled execution and compaction host contracts; release publication, installed payloads and loaded sessions remain separate evidence. The existing `1.5.0-fork.4` SDK and immutable release assets must remain available. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 11 public workspace packages share `1.5.2-fork.2`. This source candidate retains the run-scoped scheduled execution and compaction host contracts; release publication, installed payloads and loaded sessions remain separate evidence. The existing `1.5.2-fork.1` installation, prior `1.5.0-fork.4` SDK and immutable release assets must remain available. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
@@ -68,13 +68,25 @@ Fork CI uses the same credential-free `./test.sh` wrapper, including its two-wor
 
 Fork CI hydrates provider data from the immutable community `v1.5.2` source release asset, verifies SHA-256 `da14b72e5d674959b64fc541e4a9241ac9fcdfa243431479119d3edb598b2231`, and runs `build:offline` plus every existing check and test. This explicit catalog refresh includes the 1.5.2 model metadata; do not retain an older catalog while claiming full 1.5.2 model support. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
 
+## 1.5.2-fork.2 Undici security correction
+
+Coding-agent's direct external Undici dependency is pinned from `8.12.3` to `8.12.4`; all 11 public packages and internal registry pins move together to the new fork revision. The exact community v1.5.2 baseline, verified model-data pin, publication guards and native Schedule/Compaction contracts are unchanged. The already-published `v1.5.2-fork.1` assets and installed SDK are not replaced by source preparation.
+
+The [Undici v8.12.4 release notes](https://github.com/nodejs/undici/releases/tag/v8.12.4) were read before the update. They disclose six vulnerabilities, including high-severity redirect-chain cache poisoning (`GHSA-mqg3-3v4r-cm32`). The patch checks every redirect hop's origin, policy, freshness and `Vary`, invalidates old persistent SQLite cache entries, refuses credential-bearing redirect aliases, validates revalidation targets/validators, strips tuple-array credentials across origins, turns cache replay exceptions into request errors, and enforces Subresource Integrity across ASCII whitespace. A zero audit result is not evidence that the earlier dependency lacked these published risks.
+
+Compatibility assessment: HTTP/2 now replays HEADERS that raced GOAWAY without discarding accepted streams whose IDs are deferred, and retains an error sink on released streams. Pi's existing dispatcher explicitly disables HTTP/2 and retains its proxy CONNECT and timeout policies; no HTTP/2 setting is enabled by this patch. Fetch abort propagation survives garbage collection, and async iterable bodies are not read eagerly, which should preserve cancellation and backpressure rather than add a deadline. These upstream fixes do not change the fork retry budgets or Codex pre-response deadline. Cache/SRI callers may now reject or refetch responses that the vulnerable dependency incorrectly accepted; that change is intentional.
+
+Provider-free regressions resolve Undici from coding-agent's actual dependency path, not the monorepo root or Node's builtin implementation. They exercise an untrusted-origin bounce returning to the original origin, private redirect policy, tuple credential stripping and ASCII-whitespace SRI rejection/normal verification. The same tests first run against 8.12.3 as a negative control; passing cases are not counted as reproductions. Installer-lock tests compare the actual consumer's version, URL and integrity even when another workspace keeps a different hoisted version.
+
+Boundary: this corrects only coding-agent's external npm dependency and matching installer lock. The separate p2 direct Undici pin is unchanged and must not be inferred fixed from coding-agent's resolution. Node 26.13.0 still reports builtin Undici 8.12.2; this source update does not patch Node or every use of builtin `fetch`, change global host configuration, or hot-upgrade an active session. Independent exact-head source review/CI, a new immutable release, same-source artifacts and installation/loaded acceptance remain separate stages. Retain the earlier macOS watcher/npm12 limitations and sandbox/Zod audit findings rather than mechanically rerunning or weakening their assertions.
+
 ## 1.5.2 synchronization notes
 
 The candidate merges the exact stable tag into maintenance history (395 community commits since v1.5.0), not unpublished community main. All 11 public packages and internal registry pins use `1.5.2-fork.1`; root and fork-URL installer locks are regenerated. Fork CI retains the protected `build-check-test` and `mcp-conformance` producers rather than splitting the required test producer into optional parallel jobs. No community publication channel is enabled.
 
 Chord v2 moved from `next` / `next-node` to the root / `node` source paths. The stale-lock and protocol-close fixes overlap community equivalents; the fork's pending-discovery/dependency-install protection is combined with upstream file-move rebuild detection. The upstream ordinary-prompt preflight reservation also excludes native scheduled admission until the ordinary prompt releases it. Existing retry, scheduled-input and compaction tests remain authoritative; no installed Schedule/Compaction runtime is changed by this sync.
 
-Undici remains exactly `8.12.3`; no undici update is performed. The catalog is the source-owner-generated v1.5.2 snapshot, not handwritten metadata or a live pricing refresh. Local macOS fixture timing and Node/npm-version validation limits must be recorded with actual commands; Linux exact-head CI is separate from future clean same-HEAD native/Node artifact builds. This stage neither merges the PR nor publishes, installs or activates a runtime.
+During the `1.5.2-fork.1` synchronization, Undici remained exactly `8.12.3`; no Undici update was performed in that stage. The catalog is the source-owner-generated v1.5.2 snapshot, not handwritten metadata or a live pricing refresh. Local macOS fixture timing and Node/npm-version validation limits must be recorded with actual commands; Linux exact-head CI is separate from future clean same-HEAD native/Node artifact builds. This stage neither merges the PR nor publishes, installs or activates a runtime.
 
 Local preparation passes `npm run check`, `build:offline`, the two-job daemon build, p2's separate check and 63 focused fork regressions. The first full macOS `./test.sh` attempt is not a pass: it reports Chord filesystem-watch failures and reaches the command's 900-second bound during coding-agent tests. A minimal fresh-directory `fs.watch` probe receives no create/write events on either Node 22.23.2 or 26.13.0 on that host. Node 26/npm 12 additionally fails Chord's git-install and `npm pack --json` fixtures; the unchanged 14-test install file passes on Node 22/npm 10. Keep these limits distinct from exact-head Linux CI and later native acceptance; no assertions are disabled.
 
