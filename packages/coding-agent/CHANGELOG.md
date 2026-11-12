@@ -9,6 +9,16 @@
 ### Fixed
 
 - Add native unattended-input guard negotiation to scheduled capability v1. Exact scheduled direct/nested/late-registered questions checkpoint and drain before tool hooks or UI; ordinary questions and arbitrary lifecycle-hook UNKNOWN protection remain unchanged.
+- Fixed MCP tools loaded by `tool_search` being dropped on resume and `/reload` when an extension deactivates only its own tool at `session_start`, as pi-web-access and pi-subagents do in `toolActivation: "auto"` mode ([#11996](https://github.com/earendil-works/pi/issues/11996))
+- Fixed the standalone binary failing to resolve extension npm dependencies whose entry point is declared in `package.json` `main` or `exports` (for example `shiki`, `yaml`, `graceful-fs`), including imports made from inside other dependencies ([#12012](https://github.com/earendil-works/pi/issues/12012))
+- Fixed the find tool returning no results for patterns starting with `./`, such as `./src/*.ts` ([#12020](https://github.com/earendil-works/pi/issues/12020))
+- Fixed pi exiting with an uncaught `AbortError` when a `read` tool call is cancelled while the file is being opened ([#11956](https://github.com/earendil-works/pi/issues/11956))
+- Fixed pi exiting with an uncaught `AbortError` when the session picker cancels loading after skipping a `.jsonl` file that is not a session, and fixed such files staying open ([#11956](https://github.com/earendil-works/pi/issues/11956))
+- Fixed `/share` crashing pi when the GitHub CLI fails to start
+- Fixed `pi update` on Windows managed installs failing with "Could not verify managed Pi" when an older system Node.js comes before the installer's standalone Node.js on PATH ([#12048](https://github.com/earendil-works/pi/issues/12048))
+- Fixed `/export` HTML showing raw terminal hyperlink escape codes around links in custom tool output; links are now clickable ([#12003](https://github.com/earendil-works/pi/issues/12003))
+- Fixed the bash tool returning no output, with a footer like `[Showing lines 3-2 of 2]`, when the output ends in one line longer than about 100KB, such as a `grep` match in a minified file; it now shows the end of that line ([#12062](https://github.com/earendil-works/pi/issues/12062))
+- Fixed provider errors reading "Connection closed." not triggering automatic retries ([#12064](https://github.com/earendil-works/pi/issues/12064))
 
 ## [1.5.0-fork.2] - 2026-11-04
 
