@@ -109,7 +109,8 @@ function createFakeServer(
 	pair.server.onMessage((message) => {
 		if (!("id" in message) || !("method" in message)) return;
 		const request = message as JsonRpcRequest;
-		const send = () => void pair.server.send({ jsonrpc: "2.0", id: request.id, result: respond(request) });
+		const send = () =>
+			void pair.server.send({ jsonrpc: "2.0", id: request.id, result: respond(request) }).catch(() => undefined);
 		if (request.method !== "initialize" || initializeDelayMs === 0) queueMicrotask(send);
 		else if (Number.isFinite(initializeDelayMs)) setTimeout(send, initializeDelayMs);
 	});
@@ -775,6 +776,43 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
 		expect(getAssistantTexts(harness)).toEqual(["ready"]);
 		// Codemode is activated from the config, before the server connects.
 		expect(declaredToolNames(harness)).toEqual(["codemode"]);
+	});
+
+	it("retries a timed-out stdio startup connection", async () => {
+		const entry: McpServerEntry = {
+			name: "flaky",
+			config: { command: "test-server", timeout: 0.005 },
+			source: "test",
+		};
+		const notifications: string[] = [];
+		let attempts = 0;
+		const harness = await createHarness({
+			initialActiveToolNames: [],
+			extensionFactories: [
+				createCodemodeExtension(),
+				createToolSearchExtension(),
+				createMcpExtension({
+					loadConfig: () => ({ servers: [entry], errors: [] }),
+					createTransport: () => {
+						attempts++;
+						const pair = createFakeServer([], { initializeDelayMs: attempts === 1 ? 50 : 0 });
+						void pair.server.start();
+						return pair.client;
+					},
+				}),
+			],
+		});
+		harnesses.push(harness);
+		await harness.session.bindExtensions({
+			uiContext: createTestUiContext({ notify: (message) => notifications.push(message) }),
+		});
+
+		await vi.waitFor(() => expect(harness.session.getCallableToolNames()).toContain("mcp__flaky__search"), {
+			timeout: 3_000,
+		});
+
+		expect(attempts).toBe(2);
+		expect(notifications).not.toContain(expect.stringContaining("MCP servers need attention"));
 	});
 
 	it("keeps the codemode description unchanged when the server connects", async () => {
