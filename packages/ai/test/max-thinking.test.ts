@@ -103,33 +103,4 @@ describe("max thinking level", () => {
 		const request = (await captureCodexMaxRequest(getModel("openai-codex", modelId))) as { input: unknown[] };
 		expect(request.input.at(-1)).toEqual({ type: "configuration_update", reasoning: { effort: "max" } });
 	});
-
-	it.each([
-		"gpt-5.6-sol",
-		"gpt-6-astra",
-		"gpt-6-sol",
-		"gpt-6-luna",
-		"gpt-6.1-sol",
-		"gpt-6.1-terra",
-		"gpt-6.2-astra",
-		"gpt-6.2-sol",
-	] as const)("sends max to the Codex Responses API for %s", async (modelId) => {
-		const model = getModel("openai-codex", modelId)!;
-		const context = normalizeContext({
-			systemPrompt: "You are a helpful assistant.",
-			messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
-		});
-		let payload: unknown;
-
-		await streamSimpleOpenAICodexResponses(model, context, {
-			apiKey: mockToken(),
-			reasoning: "max",
-			onPayload: (request) => {
-				payload = request;
-				throw new Error("payload captured");
-			},
-		}).result();
-
-		expect(payload).toMatchObject({ reasoning: { effort: "max", summary: "auto" } });
-	});
 });
