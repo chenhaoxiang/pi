@@ -68,7 +68,6 @@ import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/tru
 import { builtInExtensions } from "./extensions/index.ts";
 import { loadMcpCommand } from "./extensions/mcp/cli.lazy.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
-import { writeDiagnosticsToStderr } from "./modes/diagnostics-stderr.ts";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
 import { initTheme, setThemeJsonValidator, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
 import { validateThemeJson } from "./modes/interactive/theme/theme-schema.ts";
@@ -99,6 +98,14 @@ async function readPipedStdin(): Promise<string | undefined> {
 		});
 		process.stdin.resume();
 	});
+}
+
+function reportDiagnostics(diagnostics: readonly AgentSessionRuntimeDiagnostic[]): void {
+	for (const diagnostic of diagnostics) {
+		const color = diagnostic.type === "error" ? chalk.red : diagnostic.type === "warning" ? chalk.yellow : chalk.dim;
+		const prefix = diagnostic.type === "error" ? "Error: " : diagnostic.type === "warning" ? "Warning: " : "";
+		console.error(color(`${prefix}${diagnostic.message}`));
+	}
 }
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
@@ -945,15 +952,11 @@ export async function main(args: string[], options?: MainOptions) {
 	applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
 	configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
 
-	// Taking them marks them reported, so the modes do not report them again after a session replacement.
-	const startupDiagnostics = deduplicateDiagnostics([
-		...startupSettingsDiagnostics,
-		...runtime.takeUnreportedDiagnostics(),
-	]);
+	const startupDiagnostics = deduplicateDiagnostics([...startupSettingsDiagnostics, ...runtime.diagnostics]);
 	const hasRuntimeErrors = runtime.diagnostics.some((diagnostic) => diagnostic.type === "error");
 
 	if (parsed.help) {
-		writeDiagnosticsToStderr(startupDiagnostics);
+		reportDiagnostics(startupDiagnostics);
 		const extensionFlags = resourceLoader
 			.getExtensions()
 			.extensions.flatMap((extension) => Array.from(extension.flags.values()));
@@ -962,7 +965,7 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 
 	if (parsed.listModels !== undefined) {
-		writeDiagnosticsToStderr(startupDiagnostics);
+		reportDiagnostics(startupDiagnostics);
 		const searchPattern = typeof parsed.listModels === "string" ? parsed.listModels : undefined;
 		await listModels(modelRuntime, searchPattern, AbortSignal.timeout(15_000));
 		process.exit(0);
@@ -990,7 +993,7 @@ export async function main(args: string[], options?: MainOptions) {
 
 	time("resolveModelScope");
 	if (appMode !== "interactive" || hasRuntimeErrors) {
-		writeDiagnosticsToStderr(startupDiagnostics);
+		reportDiagnostics(startupDiagnostics);
 	}
 	if (hasRuntimeErrors) {
 		if (runtime.diagnostics.some((diagnostic) => diagnostic.message.includes("Failed to load extension"))) {
