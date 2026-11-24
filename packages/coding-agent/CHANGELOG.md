@@ -9,6 +9,7 @@
 ### Fixed
 
 - Add native unattended-input guard negotiation to scheduled capability v1. Exact scheduled direct/nested/late-registered questions checkpoint and drain before tool hooks or UI; ordinary questions and arbitrary lifecycle-hook UNKNOWN protection remain unchanged.
+- Selectively integrate extension package resolution, interactive package-output capture and session-start/reload event fixes; scheduled execution, retry policy, compaction recovery and fork install safeguards remain unchanged.
 
 ## [1.5.0-fork.2] - 2026-11-04
 

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Selectively integrate provider transport/schema reliability fixes from the community 1.6 line while retaining the fork's 600-attempt stepped retry, circuit breaker and billing classification.
+- Add Codex WebSocket recovery, system-prompt/prompt-cache continuity and GPT-6.2 catalog support without changing the fork's release or dependency identity.
+
 ## [1.5.0-fork.2] - 2026-11-04
 
 ### Fixed
