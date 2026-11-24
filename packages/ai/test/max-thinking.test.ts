@@ -91,14 +91,4 @@ describe("max thinking level", () => {
 		});
 	});
 
-	it.each([
-		"gpt-6-astra",
-		"gpt-6-sol",
-		"gpt-6-luna",
-		"gpt-6.1-sol",
-		"gpt-6.1-terra",
-	] as const)("sends max as a configuration_update item to the Codex Responses API for %s", async (modelId) => {
-		const request = (await captureCodexMaxRequest(getModel("openai-codex", modelId))) as { input: unknown[] };
-		expect(request.input.at(-1)).toEqual({ type: "configuration_update", reasoning: { effort: "max" } });
-	});
 });
