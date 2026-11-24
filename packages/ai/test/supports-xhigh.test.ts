@@ -109,15 +109,15 @@ describe("getSupportedThinkingLevels", () => {
 		},
 	);
 
-	// OpenAI and Codex reject reasoning.effort "none" for GPT-6.1 Sol and GPT-6.2.
-	it.each(["gpt-6.1-sol"] as const)("does not support off for %s", (modelId) => {
+	// OpenAI and Codex reject reasoning.effort "none" for GPT-6.1 Sol.
+	it("does not support off for GPT-6.1 Sol", () => {
 		const expected = {
 			openai: ["low", "medium", "high", "xhigh", "max"],
 			azure: ["low", "medium", "high", "xhigh", "max"],
 			"openai-codex": ["minimal", "low", "medium", "high", "xhigh", "max"],
 		} as const;
 		for (const [provider, levels] of Object.entries(expected)) {
-			const model = getModel(provider as keyof typeof expected, modelId);
+			const model = getModel(provider as keyof typeof expected, "gpt-6.1-sol");
 			expect(model).toBeDefined();
 			expect(getSupportedThinkingLevels(model!)).toEqual(levels);
 			expect(model!.thinkingLevelMap?.off).toBeNull();
@@ -169,15 +169,12 @@ describe("getSupportedThinkingLevels", () => {
 		}
 	});
 
-	it.each([
-		"gpt-6-astra",
-		"gpt-6-luna",
-		"gpt-6-sol",
-		"gpt-6.1-sol",
-		"gpt-6.1-terra",
-	] as const)("uses the Azure Foundry 1.05M context window for %s", (modelId) => {
-		expect(getModel("azure", modelId)?.contextWindow).toBe(1050000);
-	});
+	it.each(["gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra"] as const)(
+		"uses the Azure Foundry 1.05M context window for %s",
+		(modelId) => {
+			expect(getModel("azure", modelId)?.contextWindow).toBe(1050000);
+		},
+	);
 
 	it("includes only medium/high/xhigh for OpenAI GPT-5.5 Pro", () => {
 		const model = getModel("openai", "gpt-5.5-pro");
