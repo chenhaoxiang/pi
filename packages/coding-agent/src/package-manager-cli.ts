@@ -1079,12 +1079,10 @@ export async function handlePackageCommand(
 	try {
 		if (options.command === "update") {
 			const target = options.updateTarget ?? { type: "self" };
-			const activeManagedRoot = getActiveManagedInstallRoot();
 			if (
 				updateTargetIncludesSelf(target) &&
 				isMaintainedForkVersion(VERSION) &&
-				!runtimeOptions.allowMaintainedForkSelfUpdate &&
-				!activeManagedRoot
+				!runtimeOptions.allowMaintainedForkSelfUpdate
 			) {
 				throw new Error(
 					"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
