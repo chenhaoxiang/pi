@@ -39,7 +39,8 @@ import { wholeView } from "../fixtures/whole-view.ts";
 import { type Cell, holdIn, poll, startFixture } from "./helpers.ts";
 import { SESSION, type Stub, sessionsStub, topology } from "./tui-fixture.ts";
 
-const plain = (lines: string[]): string => lines.map((line) => stripTerminalSequences(line).trimEnd()).join("\n");
+const plain = (lines: readonly string[]): string =>
+	lines.map((line) => stripTerminalSequences(line).trimEnd()).join("\n");
 const CTRL_C = "\x03";
 const CTRL_D = "\x04";
 const CTRL_END = "\x1b[1;5F";
@@ -409,6 +410,17 @@ test("reading position: held while output grows, kept across facet reload, ctrl+
 	await poll(async () => (await screen()) === before, 5000, "restored reading position");
 	send(CTRL_END);
 	await poll(async () => (await screen()).includes("appended-9"));
+});
+
+test("a rendered message keeps its OSC 133 zones once across frames", async () => {
+	// pi-tui reuses a Container's array until a child changes; the prompt zones must be added to a copy.
+	const message = assistant([{ type: "text", text: "zoned answer" }]);
+	const view = new AssistantMessageComponent(ctx(), message, true);
+	const first = view.render(80).join("\n");
+	const second = view.render(80).join("\n");
+	assert.equal(second, first);
+	assert.equal(second.split("\x1b]133;A\x07").length - 1, 1);
+	assert.equal(second.split("\x1b]133;C\x07").length - 1, 1);
 });
 
 test("history prepend keeps the visible content; ctrl+home reaches the conversation start", async (t) => {
