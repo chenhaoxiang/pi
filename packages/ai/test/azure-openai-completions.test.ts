@@ -143,7 +143,7 @@ describe("azure deepseek-v4-pro over Chat Completions", () => {
 	it("sends the system prompt under the system role", async () => {
 		await azure.stream(deepSeekModel(), context, { apiKey: "test-key", reasoningEffort: "low" }).result();
 
-		expect(mockState.lastParams?.messages?.[0]).toMatchObject({ role: "system", content: "sys" });
+		expect(mockState.lastParams?.messages?.[0]).toMatchObject({ role: "developer", content: "sys" });
 	});
 
 	// The deployment honours system messages sent mid-conversation, so pi must not collapse them.
@@ -160,9 +160,9 @@ describe("azure deepseek-v4-pro over Chat Completions", () => {
 		await azure.stream(deepSeekModel(), resumed, { apiKey: "test-key" }).result();
 
 		expect(mockState.lastParams?.messages?.map((message) => message.role)).toEqual([
-			"system",
+			"developer",
 			"user",
-			"system",
+			"developer",
 			"user",
 		]);
 	});
