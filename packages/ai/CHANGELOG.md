@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.6.0-fork.1] - 2026-11-26
+
+### Changed
+
+- Integrated the community 1.6.0 provider transport, schema and catalog line while keeping the fork's 600-attempt stepped retry schedule, consecutive-error circuit breaker, billing-URL classification guard and Codex pre-response deadline.
+- Added the code-owner build seam used by Durable (`./session-resources`, image fit) without changing provider routing or credential handling.
+
+## [Unreleased]
+
+### Fixed
+
+- Selectively integrate provider transport/schema reliability fixes from the community 1.6 line while retaining the fork's 600-attempt stepped retry, circuit breaker and billing classification.
+- Add Codex WebSocket recovery, system-prompt/prompt-cache continuity and GPT-6.2 catalog support without changing the fork's release or dependency identity.
+
+## [1.5.0-fork.2] - 2026-11-04
+
+### Fixed
+
+- Fixed transient TPM/RPM rate limits being treated as terminal billing errors when their diagnostics contain billing help URLs. URL contents no longer supply retry-classification keywords; actual account limits and original diagnostics are preserved.
+
 ## [1.6.0] - 2026-11-20
 
 ### Added

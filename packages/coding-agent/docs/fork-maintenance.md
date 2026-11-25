@@ -4,7 +4,7 @@ project: pi
 status: active
 truth_mode: maintained
 created: 2026-10-07
-updated: 2026-11-11
+updated: 2026-11-26
 ssot: true
 owner: chx
 ---
@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The `1.5.2-fork.2` source candidate integrates exact community tag `v1.5.2`, commit `b4afdddf44e059c67ccf5097e5317d913521b470`, while retaining fork retry, transport, security and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.6.0-fork.1` source candidate integrates the complete community v1.6.0 dependency closure (AI, agent core, coding agent, MCP, Chord, Durable, TUI and env) at commit `faac585884ae2c013a6b1400f3e9e77f10b34bac`, while retaining fork retry, transport, security, scheduling and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 11 public workspace packages share `1.5.2-fork.2`. This source candidate retains the run-scoped scheduled execution and compaction host contracts; release publication, installed payloads and loaded sessions remain separate evidence. The existing `1.5.2-fork.1` installation, prior `1.5.0-fork.4` SDK and immutable release assets must remain available. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 11 public workspace packages share `1.6.0-fork.1`. This source candidate retains the run-scoped scheduled execution and compaction host contracts; release publication, installed payloads and loaded sessions remain separate evidence. The existing `1.5.2-fork.3` installation and immutable release assets must remain available. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
@@ -66,7 +66,15 @@ This is a source/synthetic capability slice of the Schedule-owned `resilient-ser
 
 Fork CI uses the same credential-free `./test.sh` wrapper, including its two-worker bound; community CI retains direct `npm test`. This keeps every test and assertion while avoiding unbounded worker pressure on GC and child-process fixtures.
 
-Fork CI hydrates provider data from the immutable community `v1.5.2` source release asset, verifies SHA-256 `da14b72e5d674959b64fc541e4a9241ac9fcdfa243431479119d3edb598b2231`, and runs `build:offline` plus every existing check and test. This explicit catalog refresh includes the 1.5.2 model metadata; do not retain an older catalog while claiming full 1.5.2 model support. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
+Fork CI hydrates provider data from the immutable community `v1.6.0` source release asset, verifies SHA-256 `14519e288e84e713629b220bb6ade6818e32d4ff23f205fd80a7cc49dedc413e`, and runs `build:offline` plus every existing check and test. This explicit catalog refresh includes the 1.6.0 model metadata; do not retain an older catalog while claiming full 1.6.0 model support. This prevents an unrelated docs PR from changing test input through live catalog/pricing drift. Community CI retains its live generator. Catalog updates remain explicit generator changes: review the resulting metadata and update the CI snapshot pin deliberately when releasing it. Do not edit generated prices or weaken assertions to make a live catalog pass. The pin does not change runtime catalog refresh behavior or retroactively alter the published release.
+
+## 1.6.0 dependency-closure integration
+
+Community 1.6.0 is a kernel-level release: the coding agent, Chord, Durable, TUI and the environment daemon now depend on APIs that only exist in the 1.6 line (AI `session-resources`, MCP server summaries, the read-only TUI render contract, Durable image fitting). A package-level cherry-pick therefore cannot produce a working fork. The 1.6.0-fork.1 candidate integrates the whole dependency closure and then restores the fork seams on top of it.
+
+Retained fork behavior: native scheduled execution v1 with its unattended-input guard, the 600-attempt stepped retry schedule with the consecutive-equivalent-error circuit breaker, compaction stream-drop recovery, the explicit `undici/index.js` dispatcher, host-peer/install-lock checks and the immutable-Release distribution contract. Community behavior that arrived in the same wave (MCP tool restoration after resume/reload, extension `render()` read-only results, Durable image fitting, environment daemon deployment checks, Chord admission/events/store read APIs) is kept as-is rather than reverted to the older fork shape.
+
+The fork still refuses `pi update --self` and the pi.dev installer for maintained versions; it publishes and installs only its own immutable Releases. Internal packages in the coding-agent installer lock resolve from `chenhaoxiang/pi` Release assets, so a fork install never falls back to the community npm registry.
 
 ## 1.5.2-fork.2 Undici security correction
 

@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.6.0-fork.1] - 2026-11-26
+
+### Changed
+
+- Integrate the complete community 1.6.0 capability line (AI, agent core, coding agent, MCP, Chord, Durable, TUI and env) instead of a partial source wave, so scheduled execution, MCP tool restoration, extension rendering, the environment daemon and Durable image helpers all build against one dependency closure.
+- Keep the fork's native scheduled execution capability v1, unattended-input guard, 600-attempt stepped retry with the consecutive-error circuit breaker, compaction stream-drop recovery, explicit Undici dispatcher, host-peer/install-lock checks and immutable Release contract. Public retry settings documentation now matches those defaults.
+- Fork packages publish from `chenhaoxiang/pi` only; installer locks resolve internal packages from this fork's immutable Releases, and maintained fork builds still refuse the community `pi update`/pi.dev installer path.
+
+## [Unreleased]
+
+### Added
+
+- Added native scheduled execution capability v1 with exact run identity, finite per-run retry/elapsed budgets, completed-result checkpoints and acknowledged resource closure. Ordinary user retry settings and `ctx.abort()` remain unchanged; consumers must negotiate the capability before admission.
+
+### Fixed
+
+- Add native unattended-input guard negotiation to scheduled capability v1. Exact scheduled direct/nested/late-registered questions checkpoint and drain before tool hooks or UI; ordinary questions and arbitrary lifecycle-hook UNKNOWN protection remain unchanged.
+- Selectively integrate extension package resolution, interactive package-output capture and session-start/reload event fixes; scheduled execution, retry policy, compaction recovery and fork install safeguards remain unchanged.
+
+## [1.5.0-fork.2] - 2026-11-04
+
+### Fixed
+
+- Fixed automatic retry being skipped for transient TPM/RPM rate limits whose help links contain `billing`. Existing retry budgets, stepped backoff, cancellation and account-limit exclusions are unchanged.
+
 ## [1.6.0] - 2026-11-20
 
 ### New Features
@@ -329,6 +354,12 @@
 ### Removed
 
 - Removed the native OS `sandbox/` extension example and its dependency. Use the [Gondolin example](examples/extensions/gondolin/) or the [containerization guide](docs/containerization.md).
+
+## [1.4.0-fork.2] - 2026-10-28
+
+### Changed
+
+- Raised automatic retry defaults from 3 to 600 attempts, starting at 1 second and following the documented stepped schedule through 100 seconds. Later retries remain at 100 seconds; the initial request does not consume a retry. Explicit settings still override defaults.
 
 ## [1.4.0] - 2026-10-21
 
