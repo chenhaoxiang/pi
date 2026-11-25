@@ -20,7 +20,6 @@ import {
 	McpHttpError,
 	type McpRequestOptions,
 	McpSessionExpiredError,
-	McpTimeoutError,
 	type Tool as McpTool,
 	type McpTransport,
 	type ReadResourceResult,
@@ -50,7 +49,7 @@ export { McpOAuthCredentialStore, signInMcpServer } from "./oauth.ts";
 
 const DEFAULT_TIMEOUT_SECONDS = 60;
 const STDERR_TAIL_CHARS = 2_000;
-/** Delays between attempts to connect to a server that failed with a transient error. */
+/** Delays between attempts to connect to an HTTP server that failed with a transient error. */
 const CONNECT_RETRY_DELAYS_MS = [250, 1_000];
 
 /**
@@ -71,7 +70,6 @@ function errorMessage(error: unknown): string {
 
 /** Network failures and overloaded or restarting servers, which are worth another attempt. */
 function isTransientError(error: unknown): boolean {
-	if (error instanceof McpTimeoutError) return true;
 	if (error instanceof McpHttpError) {
 		return error.status === 408 || error.status === 429 || (error.status >= 500 && error.status !== 501);
 	}
@@ -344,7 +342,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
 	private async open(): Promise<McpClient> {
 		this.state = "connecting";
 		this.changed();
-		const retries = CONNECT_RETRY_DELAYS_MS;
+		const retries = "url" in this.entry.config ? CONNECT_RETRY_DELAYS_MS : [];
 		for (let attempt = 0; ; attempt++) {
 			this.stderrTail = undefined;
 			try {

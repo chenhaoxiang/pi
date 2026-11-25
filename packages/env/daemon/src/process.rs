@@ -8,7 +8,7 @@ use crate::exec::{
     start_waiter,
 };
 use crate::frame::{EVENT, Frame};
-use crate::output::Output;
+use crate::output::{Gate, Output};
 use crate::sys;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -126,24 +126,13 @@ pub fn run(
         Err(error) => return Err(abandon(child, error)),
     };
     // Like a full pipe: a program that writes faster than the link waits.
+    let gate = Gate::new(output);
     let stdout = child.stdout.take().unwrap();
-    if let Err(error) = spawn_reader(
-        0,
-        stdout,
-        sender.clone(),
-        stop.clone(),
-        Some(output.clone()),
-    ) {
+    if let Err(error) = spawn_reader(0, stdout, sender.clone(), stop.clone(), Some(gate.clone())) {
         return Err(abandon(child, error));
     }
     let stderr = child.stderr.take().unwrap();
-    if let Err(error) = spawn_reader(
-        1,
-        stderr,
-        sender.clone(),
-        stop.clone(),
-        Some(output.clone()),
-    ) {
+    if let Err(error) = spawn_reader(1, stderr, sender.clone(), stop.clone(), Some(gate.clone())) {
         return Err(abandon(child, error));
     }
     let (input, inputs) = mpsc::channel::<Input>();
@@ -191,7 +180,6 @@ pub fn run(
 
     let names = ["stdout", "stderr"];
     let mut ended = [false, false];
-    let mut paused_readers = 0;
     let mut status: Option<Result<ExitStatus, String>> = None;
     let mut idle_until: Option<Instant> = None;
     let mut aborted = false;
@@ -213,10 +201,20 @@ pub fn run(
         if status.is_some() && ended[0] && ended[1] {
             break;
         }
-        let wait = match idle_until
-            .filter(|_| paused_readers == 0 || aborted || !matches!(status, Some(Ok(_))))
-        {
-            Some(idle) => idle.saturating_duration_since(Instant::now()),
+        let wait = match idle_until {
+            Some(idle) => {
+                let now = Instant::now();
+                if now < idle {
+                    idle - now
+                } else if gate.held() {
+                    // Silence while the link holds a reader up is not the end of the output: the pipe may hold more.
+                    idle_until = Some(now + EXIT_STDIO_GRACE);
+                    EXIT_STDIO_GRACE
+                } else {
+                    // A descendant may hold the pipes open after the program exited; stop waiting for it.
+                    break;
+                }
+            }
             None => Duration::from_secs(3600),
         };
         match receiver.recv_timeout(wait) {
@@ -235,14 +233,6 @@ pub fn run(
                 }
             }
             Ok(Message::Eof(stream)) => ended[stream] = true,
-            Ok(Message::ReaderPaused) => paused_readers += 1,
-            Ok(Message::ReaderResumed) => {
-                paused_readers -= 1;
-                // Link backpressure is not pipe silence: give the reader time to drain after it resumes.
-                if matches!(status, Some(Ok(_))) {
-                    idle_until = Some(Instant::now() + EXIT_STDIO_GRACE);
-                }
-            }
             Ok(Message::Exit(exit)) => {
                 // The waiter already ended the group; nothing is left to kill.
                 killed = true;
@@ -258,14 +248,7 @@ pub fn run(
                 kill(&mut killed);
             }
             Ok(Message::Kill) => kill(&mut killed),
-            Err(RecvTimeoutError::Timeout) => {
-                if (paused_readers == 0 || aborted || !matches!(status, Some(Ok(_))))
-                    && idle_until.is_some_and(|idle| Instant::now() >= idle)
-                {
-                    // A descendant may hold the pipes open after the program exited.
-                    break;
-                }
-            }
+            Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }
