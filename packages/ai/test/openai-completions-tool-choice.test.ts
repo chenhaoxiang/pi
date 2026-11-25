@@ -1226,7 +1226,7 @@ describe("openai-completions tool_choice", () => {
 		// `:free` variant delisted from the OpenRouter API; the generator override
 		// matches any `moonshotai/kimi-k2.6*` variant that is listed.
 		const model = getModel("openrouter", "moonshotai/kimi-k2.6")!;
-		expect(model.compat?.supportsDeveloperRole).toBe(false);
+		expect(model.compat?.supportsDeveloperRole).toBeUndefined();
 		expect(model.compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
 	});
 
@@ -1254,7 +1254,7 @@ describe("openai-completions tool_choice", () => {
 			const model = getModel(provider, "qwen3.7-max")!;
 			expect(model.compat?.thinkingFormat).toBe("qwen");
 			expect(model.compat?.requiresReasoningContentOnAssistantMessages).toBeUndefined();
-			expect(model.compat?.supportsDeveloperRole).toBe(false);
+			expect(model.compat?.supportsDeveloperRole).toBeUndefined();
 			expect(model.compat?.supportsStore).toBe(false);
 		}
 	});
@@ -1876,7 +1876,6 @@ describe("openai-completions tool_choice", () => {
 
 		expect(model.compat).toMatchObject({
 			supportsStore: false,
-			supportsDeveloperRole: false,
 			supportsReasoningEffort: false,
 			maxTokensField: "max_tokens",
 			thinkingFormat: "ant-ling",
