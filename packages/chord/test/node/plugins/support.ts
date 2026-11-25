@@ -5,7 +5,6 @@ import { execFileSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { setTimeout as settleFixtureWrites } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { afterEach } from "vitest";
 import * as chord from "../../../src/index.ts";
@@ -55,8 +54,6 @@ export async function writeFiles(dir: string, files: Readonly<Record<string, str
 		await mkdir(dirname(join(dir, path)), { recursive: true });
 		await writeFile(join(dir, path), text);
 	}
-	// Let fixture-creation events drain before a later build takes its mark snapshot.
-	if (process.platform === "darwin") await settleFixtureWrites(100);
 }
 
 /** Writes a plugin named `name` into `root/dir`: its `package.json` (with `manifest`'s fields) and `files`. */

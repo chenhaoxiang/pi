@@ -34,13 +34,19 @@ Use the reference pages to look up [CLI options](cli.md), [settings](settings.md
 
 For platform-specific help, see [Terminal Setup](terminal-setup.md), [Windows](windows.md), [tmux](tmux.md), [Termux on Android](termux.md), or [Containerization](containerization.md).
 
-For the maintained `chenhaoxiang/pi` distribution, see [Fork maintenance and rollback](fork-maintenance.md). Its release channel and community mirror are distinct from the community installer. The [1.0.4-fork.1 installation snapshot](fork-installation-2026-10-08.md) records release and local acceptance boundaries.
+## Maintained fork
 
-For the current baseline and integration acceptance, see [1.4.0-fork.1 synchronization](fork-upgrade-1.4.0-2026-10-22.md). The [1.3.0-fork.1 synchronization](fork-upgrade-1.3.0-2026-10-17.md) remains a historical record. The [1.2.0-fork.1 upgrade](fork-upgrade-1.2.0-2026-10-14.md), [1.1.0-fork.1 upgrade](fork-upgrade-1.1.0-2026-10-10.md) and previous release snapshots remain historical records.
+The maintained `chenhaoxiang/pi` fork keeps its branch, release, host-peer, dependency-security, and installation contracts in the following operator references:
 
-For development dependency remediation and remaining upstream advisories, see [Dependency security maintenance](fork-dependency-security-2026-10-08.md). This is distinct from the immutable installed release.
-
-For host-owned SDK peers, pinned extension resources, browser/memory handover and local rollback, see [Local extension maintenance](fork-local-extension-maintenance.md).
+- [Fork maintenance](fork-maintenance.md)
+- [Fork branch protection](fork-branch-protection.md)
+- [Fork installation](fork-installation-2026-10-08.md)
+- [Fork dependency security](fork-dependency-security-2026-10-08.md)
+- [Fork local extension maintenance](fork-local-extension-maintenance.md)
+- [Fork upgrade 1.1.0](fork-upgrade-1.1.0-2026-10-10.md)
+- [Fork upgrade 1.2.0](fork-upgrade-1.2.0-2026-10-14.md)
+- [Fork upgrade 1.3.0](fork-upgrade-1.3.0-2026-10-17.md)
+- [Fork upgrade 1.4.0](fork-upgrade-1.4.0-2026-10-22.md)
 
 ## Work safely
 

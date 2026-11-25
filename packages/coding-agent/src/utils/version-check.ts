@@ -53,9 +53,10 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
 
 export async function getLatestPiRelease(
 	currentVersion: string,
-	options: { timeoutMs?: number; retry?: boolean } = {},
+	options: { timeoutMs?: number; retry?: boolean; allowMaintainedFork?: boolean } = {},
 ): Promise<LatestPiRelease | undefined> {
-	if (process.env.PI_OFFLINE || isMaintainedForkVersion(currentVersion)) return undefined;
+	if (process.env.PI_OFFLINE || (isMaintainedForkVersion(currentVersion) && !options.allowMaintainedFork))
+		return undefined;
 
 	const response = await fetchWithRetry(
 		LATEST_VERSION_URL,
@@ -92,7 +93,7 @@ export async function getLatestPiRelease(
 
 export async function getLatestPiVersion(
 	currentVersion: string,
-	options: { timeoutMs?: number; retry?: boolean } = {},
+	options: { timeoutMs?: number; retry?: boolean; allowMaintainedFork?: boolean } = {},
 ): Promise<string | undefined> {
 	return (await getLatestPiRelease(currentVersion, options))?.version;
 }

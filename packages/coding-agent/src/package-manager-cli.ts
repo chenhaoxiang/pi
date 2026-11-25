@@ -8,7 +8,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { ModelsError } from "@earendil-works/pi-ai";
 import { Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
 import chalk from "chalk";
@@ -96,6 +96,13 @@ async function fetchInstallerArtifact(url: string, label: string): Promise<strin
 	return await response.text();
 }
 
+function getManagedReleaseVerifyEnv(): NodeJS.ProcessEnv {
+	const nodeDir = dirname(process.execPath);
+	const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+	const currentPath = process.env[pathKey] ?? "";
+	return { ...process.env, [pathKey]: [nodeDir, currentPath].filter(Boolean).join(delimiter) };
+}
+
 async function runManagedNpmCi(stageDir: string): Promise<void> {
 	// No age-gate override: the release lockfile pins every package, so npm never
 	// resolves versions and a configured min-release-age does not apply.
@@ -120,10 +127,17 @@ function verifyManagedRelease(releaseDir: string, expectedVersion: string): void
 		".bin",
 		process.platform === "win32" ? `${APP_NAME}.cmd` : APP_NAME,
 	);
-	const result = spawnProcessSync(binPath, ["--version"], {
-		encoding: "utf8",
-		stdio: ["ignore", "pipe", "pipe"],
-	});
+	const verifyWithRunningNode =
+		process.platform !== "win32" && readFileSync(binPath, "utf8").startsWith("#!/usr/bin/env node");
+	const result = spawnProcessSync(
+		verifyWithRunningNode ? process.execPath : binPath,
+		verifyWithRunningNode ? [binPath, "--version"] : ["--version"],
+		{
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+			env: getManagedReleaseVerifyEnv(),
+		},
+	);
 	if (result.error || result.status !== 0) {
 		const reason = result.error?.message || result.stderr.trim() || `exit code ${result.status ?? "unknown"}`;
 		throw new Error(`Could not verify managed Pi ${expectedVersion}: ${reason}`);
@@ -708,14 +722,9 @@ interface SelfUpdatePlan {
 }
 
 async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
-	if (isMaintainedForkVersion(VERSION)) {
-		throw new Error(
-			"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
-		);
-	}
 	let latestRelease: Awaited<ReturnType<typeof getLatestPiRelease>>;
 	try {
-		latestRelease = await getLatestPiRelease(VERSION, { retry: true });
+		latestRelease = await getLatestPiRelease(VERSION, { retry: true, allowMaintainedFork: true });
 	} catch (error: unknown) {
 		throw new Error(`Could not determine latest ${APP_NAME} version: ${formatVersionCheckError(error)}`, {
 			cause: error,
@@ -818,6 +827,8 @@ function prepareWindowsNpmSelfUpdate(): void {
 
 export interface PackageCommandRuntimeOptions {
 	extensionFactories?: InlineExtension[];
+	/** Test-only seam for exercising the community self-update flow on a maintained fork build. */
+	allowMaintainedForkSelfUpdate?: boolean;
 }
 
 interface CommandSettingsResult {
@@ -1066,6 +1077,20 @@ export async function handlePackageCommand(
 	});
 
 	try {
+		if (options.command === "update") {
+			const target = options.updateTarget ?? { type: "self" };
+			const activeManagedRoot = getActiveManagedInstallRoot();
+			if (
+				updateTargetIncludesSelf(target) &&
+				isMaintainedForkVersion(VERSION) &&
+				!runtimeOptions.allowMaintainedForkSelfUpdate &&
+				!activeManagedRoot
+			) {
+				throw new Error(
+					"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
+				);
+			}
+		}
 		switch (options.command) {
 			case "install":
 				await packageManager.installAndPersist(source!, { local: options.local });
@@ -1121,11 +1146,6 @@ export async function handlePackageCommand(
 
 			case "update": {
 				const target = options.updateTarget ?? { type: "self" };
-				if (updateTargetIncludesSelf(target) && isMaintainedForkVersion(VERSION)) {
-					throw new Error(
-						"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
-					);
-				}
 				if (options.showExtensionsSkippedNote) {
 					console.log(
 						chalk.dim(`Extensions are skipped. Run ${APP_NAME} update --extensions to update extensions.`),
