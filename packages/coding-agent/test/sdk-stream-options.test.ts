@@ -243,6 +243,31 @@ describe("createAgentSession stream options", () => {
 		expect(options?.timeoutMs).toBe(0);
 	});
 
+	it("keeps a bounded Codex response-headers deadline when HTTP idle timeout is disabled", async () => {
+		const options = await captureStreamOptions("openai-codex-responses", { httpIdleTimeoutMs: 0 });
+
+		expect(options?.timeoutMs).toBe(2147483647);
+		expect(options?.responseHeadersTimeoutMs).toBe(120000);
+	});
+
+	it("forwards the Codex response-headers deadline from provider settings", async () => {
+		const options = await captureStreamOptions("openai-codex-responses", {
+			retry: { provider: { responseHeadersTimeoutMs: 4321 } },
+		});
+
+		expect(options?.responseHeadersTimeoutMs).toBe(4321);
+	});
+
+	it("lets a request override the Codex response-headers deadline", async () => {
+		const options = await captureStreamOptions(
+			"openai-codex-responses",
+			{ retry: { provider: { responseHeadersTimeoutMs: 4321 } } },
+			{ responseHeadersTimeoutMs: 0 },
+		);
+
+		expect(options?.responseHeadersTimeoutMs).toBe(0);
+	});
+
 	it("forwards websocketConnectTimeoutMs from settings", async () => {
 		const options = await captureStreamOptions("openai-codex-responses", { websocketConnectTimeoutMs: 1234 });
 

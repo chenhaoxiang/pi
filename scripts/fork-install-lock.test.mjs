@@ -39,12 +39,14 @@ function fixture(version, repository) {
 test("real maintained coding-agent metadata points its install lock at fork releases", () => {
 	const packageJson = JSON.parse(readFileSync(join(root, "packages/coding-agent/package.json"), "utf8"));
 	assert.equal(packageJson.piConfig?.forkRepository, "chenhaoxiang/pi");
+	const release = packageJson.version;
+	assert.match(release, /^\d+\.\d+\.\d+-fork\.[1-9]\d*$/);
 	const lock = JSON.parse(readFileSync(join(root, "packages/coding-agent/install-lock/package-lock.json"), "utf8"));
 	const entries = Object.entries(lock.packages).filter(([path]) => /^node_modules\/@earendil-works\/(?:pi-[^/]+|chord)$/.test(path));
 	assert.ok(entries.length > 1);
 	for (const [path, entry] of entries) {
-		assert.equal(entry.version, "1.6.0-fork.1", path);
-		assert.ok(entry.resolved.startsWith("https://github.com/chenhaoxiang/pi/releases/download/v1.6.0-fork.1/"), path);
+		assert.equal(entry.version, release, path);
+		assert.ok(entry.resolved.startsWith(`https://github.com/chenhaoxiang/pi/releases/download/v${release}/`), path);
 	}
 });
 

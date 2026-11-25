@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0-fork.2] - 2026-11-26
+
+### Fixed
+
+- Restore the fork's Codex pre-response deadline (`retry.provider.responseHeadersTimeoutMs`): SSE waits for response headers, WebSocket waits for its first event, and the SSE body keeps its stream idle timeout. The setting, schema and docs no longer advertise behavior that is missing, and failed requests record the phase-specific `provider_request_timing` diagnostic again.
+- Restore the public scheduled-capability entry exports (`SCHEDULED_CHECKPOINT_ENTRY`, `SCHEDULED_RECEIPT_ENTRY` and the scheduled types) and the SDK section that documents them, with a regression test that keeps them exported.
+- Adapt `apps/p2` to the 1.6 contracts: prompt zones copy pi-tui's cached render arrays instead of mutating them, tool results accept `ToolPark`, the session workers pass Chord's required store, and parked tool slots show as running.
+
 ## [1.6.0-fork.1] - 2026-11-26
 
 ### Changed

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.0-fork.2] - 2026-11-26
+
+### Fixed
+
+- Restored the Codex response-headers deadline and SSE body idle timeout dropped while integrating the community 1.6 transport, including the request-phase diagnostic and its tests. A request that never returns response headers is bounded again instead of inheriting the multi-hour idle timeout.
+
 ## [1.6.0-fork.1] - 2026-11-26
 
 ### Changed

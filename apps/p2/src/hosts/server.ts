@@ -202,6 +202,7 @@ export async function startServer(options: ServerOptions = {}): Promise<P2Server
 			plugins: chordPlugins,
 			app: APP,
 			dataDir,
+			store,
 			fake,
 			entry: fileURLToPath(new URL("./worker.ts", import.meta.url)),
 			// A young generation of at most 2 MiB per semi-space (default 16): V8 grows it to 32 MiB committed during bursts

@@ -101,7 +101,12 @@ const run = async (
 	args: string[],
 	api = callApi(42),
 ): Promise<ToolExecutionResult & { structuredOutput?: JsonValue }> =>
-	terminal(backend).execute({ command, args }, api, BACKGROUND_CONTEXT);
+	terminal(backend)
+		.execute({ command, args }, api, BACKGROUND_CONTEXT)
+		.then((result) => {
+			assert.ok(!("sleep" in result) && !("wait" in result), "the terminal tool never parks");
+			return result as ToolExecutionResult & { structuredOutput?: JsonValue };
+		});
 
 test("code mode only while code mode is on; tool_search reaches it otherwise", () => {
 	const { backend } = recorder();
