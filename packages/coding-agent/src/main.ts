@@ -48,7 +48,7 @@ import { AuthStorage, ReadOnlyAuthStorage } from "./core/auth-storage.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
-import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
+import { resolveCliModel, resolveModelScopeWithDiagnostics, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
 import type { ProgressEvent } from "./core/package-manager.ts";
@@ -68,6 +68,7 @@ import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/tru
 import { builtInExtensions } from "./extensions/index.ts";
 import { loadMcpCommand } from "./extensions/mcp/cli.lazy.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
+import { writeDiagnosticsToStderr } from "./modes/diagnostics-stderr.ts";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
 import { initTheme, setThemeJsonValidator, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
 import { validateThemeJson } from "./modes/interactive/theme/theme-schema.ts";
@@ -98,14 +99,6 @@ async function readPipedStdin(): Promise<string | undefined> {
 		});
 		process.stdin.resume();
 	});
-}
-
-function reportDiagnostics(diagnostics: readonly AgentSessionRuntimeDiagnostic[]): void {
-	for (const diagnostic of diagnostics) {
-		const color = diagnostic.type === "error" ? chalk.red : diagnostic.type === "warning" ? chalk.yellow : chalk.dim;
-		const prefix = diagnostic.type === "error" ? "Error: " : diagnostic.type === "warning" ? "Warning: " : "";
-		console.error(color(`${prefix}${diagnostic.message}`));
-	}
 }
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
@@ -882,10 +875,15 @@ export async function main(args: string[], options?: MainOptions) {
 		];
 
 		const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
-		const scopedModels =
+		const { scopedModels, diagnostics: modelScopeDiagnostics } =
 			modelPatterns && modelPatterns.length > 0
-				? await resolveModelScope(modelPatterns, modelRuntime, { signal: AbortSignal.timeout(15_000) })
-				: [];
+				? await resolveModelScopeWithDiagnostics(modelPatterns, modelRuntime, {
+						signal: AbortSignal.timeout(15_000),
+					})
+				: { scopedModels: [], diagnostics: [] };
+		// Returned as diagnostics instead of printed: this factory runs again on /new, /resume and /fork,
+		// while the interactive TUI draws on the terminal (#11264).
+		diagnostics.push(...modelScopeDiagnostics);
 		const {
 			options: sessionOptions,
 			cliThinkingFromModel,
@@ -926,6 +924,12 @@ export async function main(args: string[], options?: MainOptions) {
 		if (created.session.model && cliThinkingOverride) {
 			created.session.setThinkingLevel(created.session.thinkingLevel);
 		}
+		// "Could not restore model x/y. Using a/b." is set again on /resume and /fork. As a diagnostic, every
+		// mode reports it at startup and after each replacement. Without any model, the message is login
+		// guidance instead: interactive mode shows it at startup, the other modes exit with it below.
+		if (created.modelFallbackMessage && created.session.model) {
+			diagnostics.push({ type: "warning", message: created.modelFallbackMessage });
+		}
 
 		return {
 			...created,
@@ -946,11 +950,15 @@ export async function main(args: string[], options?: MainOptions) {
 	applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
 	configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
 
-	const startupDiagnostics = deduplicateDiagnostics([...startupSettingsDiagnostics, ...runtime.diagnostics]);
+	// Taking them marks them reported, so the modes do not report them again after a session replacement.
+	const startupDiagnostics = deduplicateDiagnostics([
+		...startupSettingsDiagnostics,
+		...runtime.takeUnreportedDiagnostics(),
+	]);
 	const hasRuntimeErrors = runtime.diagnostics.some((diagnostic) => diagnostic.type === "error");
 
 	if (parsed.help) {
-		reportDiagnostics(startupDiagnostics);
+		writeDiagnosticsToStderr(startupDiagnostics);
 		const extensionFlags = resourceLoader
 			.getExtensions()
 			.extensions.flatMap((extension) => Array.from(extension.flags.values()));
@@ -959,7 +967,7 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 
 	if (parsed.listModels !== undefined) {
-		reportDiagnostics(startupDiagnostics);
+		writeDiagnosticsToStderr(startupDiagnostics);
 		const searchPattern = typeof parsed.listModels === "string" ? parsed.listModels : undefined;
 		await listModels(modelRuntime, searchPattern, AbortSignal.timeout(15_000));
 		process.exit(0);
@@ -987,7 +995,7 @@ export async function main(args: string[], options?: MainOptions) {
 
 	time("resolveModelScope");
 	if (appMode !== "interactive" || hasRuntimeErrors) {
-		reportDiagnostics(startupDiagnostics);
+		writeDiagnosticsToStderr(startupDiagnostics);
 	}
 	if (hasRuntimeErrors) {
 		if (runtime.diagnostics.some((diagnostic) => diagnostic.message.includes("Failed to load extension"))) {
@@ -1026,7 +1034,8 @@ export async function main(args: string[], options?: MainOptions) {
 		const interactiveMode = new InteractiveMode(runtime, {
 			migratedProviders,
 			startupDiagnostics,
-			modelFallbackMessage,
+			// A fallback to another model is already in startupDiagnostics.
+			modelFallbackMessage: session.model ? undefined : modelFallbackMessage,
 			autoTrustOnReloadCwd,
 			initialMessage,
 			initialImages,

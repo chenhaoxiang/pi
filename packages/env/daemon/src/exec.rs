@@ -4,7 +4,7 @@
 use crate::decode::StreamDecoder;
 use crate::errors::Failure;
 use crate::frame::{EVENT, Frame};
-use crate::output::Output;
+use crate::output::{Gate, Output};
 use crate::sys;
 use crate::window::{Pending, Window};
 use serde_json::{Map, Value, json};
@@ -29,8 +29,6 @@ pub type Groups = Arc<Mutex<HashSet<u32>>>;
 pub enum Message {
     Data(usize, Vec<u8>),
     Eof(usize),
-    ReaderPaused,
-    ReaderResumed,
     Exit(ExitStatus),
     WaitFailed(String),
     /// Abort: the command settles as `aborted`.
@@ -299,35 +297,25 @@ pub fn running<T>(
         .ok_or_else(|| Failure::new("EBADF", format!("no running {what} with this id")))
 }
 
-/// Read one pipe on its own thread until it ends or `stop` is set. With `output`, reading waits while too much output
-/// is unsent.
+/// Read one pipe on its own thread until it ends or `stop` is set. With `gate`, reading waits while too much output is
+/// unsent.
 pub fn spawn_reader(
     stream: usize,
     pipe: impl sys::Pipe + Send + 'static,
     sender: Sender<Message>,
     stop: Arc<AtomicBool>,
-    output: Option<Arc<Output>>,
+    gate: Option<Gate>,
 ) -> std::io::Result<JoinHandle<()>> {
     thread::Builder::new().spawn(move || {
         sys::read_pipe(pipe, &stop, |bytes| {
-            let delivered = sender.send(Message::Data(stream, bytes.to_vec())).is_ok();
-            if let Some(output) = &output {
-                wait_for_output(output, &sender, &stop);
+            let deliver = || sender.send(Message::Data(stream, bytes.to_vec())).is_ok();
+            match &gate {
+                Some(gate) => gate.pass(&stop, deliver),
+                None => deliver(),
             }
-            delivered
         });
         let _ = sender.send(Message::Eof(stream));
     })
-}
-
-/// Pause pipe-silence accounting while this reader waits for the output link.
-pub fn wait_for_output(output: &Output, sender: &Sender<Message>, stop: &AtomicBool) {
-    let waited = output.wait_for_room(stop, || {
-        let _ = sender.send(Message::ReaderPaused);
-    });
-    if waited {
-        let _ = sender.send(Message::ReaderResumed);
-    }
 }
 
 fn output_frame(id: u32, stream: &str, text: String, skipped: Option<Value>) -> Frame {
@@ -404,7 +392,7 @@ pub fn run(
     let stop = Arc::new(AtomicBool::new(false));
     // Without a window, output is not coalesced; reading then waits for the link.
     let gate = if request.window.is_none() {
-        Some(output.clone())
+        Some(Gate::new(output))
     } else {
         None
     };
@@ -424,7 +412,7 @@ pub fn run(
         return Err(abandon(child, error));
     }
     let stderr = child.stderr.take().unwrap();
-    if let Err(error) = spawn_reader(1, stderr, sender.clone(), stop.clone(), gate) {
+    if let Err(error) = spawn_reader(1, stderr, sender.clone(), stop.clone(), gate.clone()) {
         return Err(abandon(child, error));
     }
     if let Err((child, error)) = start_waiter(child, None, sender.clone()) {
@@ -464,7 +452,6 @@ pub fn run(
         }
     };
     let mut ended = [false, false];
-    let mut paused_readers = 0;
     let mut status: Option<Result<ExitStatus, String>> = None;
     let mut idle_until: Option<Instant> = None;
     let mut timed_out = false;
@@ -489,6 +476,15 @@ pub fn run(
         if status.is_some() && ended[0] && ended[1] {
             break;
         }
+        if idle_until.is_some_and(|idle| now >= idle) {
+            // Silence while the link holds a reader up is not the end of the output: the pipe may hold more.
+            if gate.as_ref().is_some_and(Gate::held) {
+                idle_until = Some(now + EXIT_STDIO_GRACE);
+            } else {
+                // A descendant may hold the pipes open after the process exited; stop waiting for it.
+                break;
+            }
+        }
         if let Some(pending) = &mut pending
             && !pending.is_empty()
             && now >= pending.next_send()
@@ -500,9 +496,7 @@ pub fn run(
         if let Some(deadline) = deadline.filter(|_| !timed_out) {
             wait = wait.min(deadline.saturating_duration_since(now));
         }
-        if let Some(idle) = idle_until.filter(|_| {
-            paused_readers == 0 || timed_out || aborted || !matches!(status, Some(Ok(_)))
-        }) {
+        if let Some(idle) = idle_until {
             wait = wait.min(idle.saturating_duration_since(now));
         }
         if let Some(pending) = pending.as_ref().filter(|pending| !pending.is_empty()) {
@@ -526,14 +520,6 @@ pub fn run(
                 }
             }
             Ok(Message::Eof(stream)) => ended[stream] = true,
-            Ok(Message::ReaderPaused) => paused_readers += 1,
-            Ok(Message::ReaderResumed) => {
-                paused_readers -= 1;
-                // Link backpressure is not pipe silence: give the reader time to drain after it resumes.
-                if matches!(status, Some(Ok(_))) {
-                    idle_until = Some(Instant::now() + EXIT_STDIO_GRACE);
-                }
-            }
             Ok(Message::Exit(exit)) => {
                 status = Some(Ok(exit));
                 idle_until = Some(Instant::now() + EXIT_STDIO_GRACE);
@@ -547,14 +533,7 @@ pub fn run(
                 kill(&mut killed);
             }
             Ok(Message::Kill) => kill(&mut killed),
-            Err(RecvTimeoutError::Timeout) => {
-                if (paused_readers == 0 || timed_out || aborted || !matches!(status, Some(Ok(_))))
-                    && idle_until.is_some_and(|idle| Instant::now() >= idle)
-                {
-                    // A descendant may hold the pipes open after the process exited.
-                    break;
-                }
-            }
+            Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }
@@ -601,46 +580,4 @@ pub fn run(
         result["spillPath"] = json!(path);
     }
     Ok(result)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reports_reader_pause_and_resume_around_link_backpressure() {
-        let output = Arc::new(Output::default());
-        output.bulk(
-            Frame::with_payload(EVENT, 1, json!({}), vec![0; 5 * 1024 * 1024]),
-            None,
-        );
-        let (sender, receiver) = mpsc::channel();
-        let reader_output = output.clone();
-        let reader = thread::spawn(move || {
-            wait_for_output(&reader_output, &sender, &AtomicBool::new(false));
-        });
-        assert!(matches!(
-            receiver.recv_timeout(Duration::from_secs(1)),
-            Ok(Message::ReaderPaused)
-        ));
-        // A pause longer than EXIT_STDIO_GRACE must remain a pause, not look like pipe silence.
-        assert!(matches!(
-            receiver.recv_timeout(EXIT_STDIO_GRACE * 2),
-            Err(RecvTimeoutError::Timeout)
-        ));
-        output.close();
-        assert!(matches!(
-            receiver.recv_timeout(Duration::from_secs(1)),
-            Ok(Message::ReaderResumed)
-        ));
-        reader.join().unwrap();
-    }
-
-    #[test]
-    fn does_not_report_a_reader_pause_without_link_backpressure() {
-        let output = Output::default();
-        let (sender, receiver) = mpsc::channel();
-        wait_for_output(&output, &sender, &AtomicBool::new(false));
-        assert!(receiver.try_recv().is_err());
-    }
 }

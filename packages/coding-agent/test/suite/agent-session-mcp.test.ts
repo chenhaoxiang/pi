@@ -109,8 +109,7 @@ function createFakeServer(
 	pair.server.onMessage((message) => {
 		if (!("id" in message) || !("method" in message)) return;
 		const request = message as JsonRpcRequest;
-		const send = () =>
-			void pair.server.send({ jsonrpc: "2.0", id: request.id, result: respond(request) }).catch(() => undefined);
+		const send = () => void pair.server.send({ jsonrpc: "2.0", id: request.id, result: respond(request) });
 		if (request.method !== "initialize" || initializeDelayMs === 0) queueMicrotask(send);
 		else if (Number.isFinite(initializeDelayMs)) setTimeout(send, initializeDelayMs);
 	});
@@ -778,43 +777,6 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
 		expect(declaredToolNames(harness)).toEqual(["codemode"]);
 	});
 
-	it("retries a timed-out stdio startup connection", async () => {
-		const entry: McpServerEntry = {
-			name: "flaky",
-			config: { command: "test-server", timeout: 0.005 },
-			source: "test",
-		};
-		const notifications: string[] = [];
-		let attempts = 0;
-		const harness = await createHarness({
-			initialActiveToolNames: [],
-			extensionFactories: [
-				createCodemodeExtension(),
-				createToolSearchExtension(),
-				createMcpExtension({
-					loadConfig: () => ({ servers: [entry], errors: [] }),
-					createTransport: () => {
-						attempts++;
-						const pair = createFakeServer([], { initializeDelayMs: attempts === 1 ? 50 : 0 });
-						void pair.server.start();
-						return pair.client;
-					},
-				}),
-			],
-		});
-		harnesses.push(harness);
-		await harness.session.bindExtensions({
-			uiContext: createTestUiContext({ notify: (message) => notifications.push(message) }),
-		});
-
-		await vi.waitFor(() => expect(harness.session.getCallableToolNames()).toContain("mcp__flaky__search"), {
-			timeout: 3_000,
-		});
-
-		expect(attempts).toBe(2);
-		expect(notifications).not.toContain(expect.stringContaining("MCP servers need attention"));
-	});
-
 	it("keeps the codemode description unchanged when the server connects", async () => {
 		const { harness } = await setupSlow({}, 20);
 		const description = () => harness.session.agent.state.tools.find((tool) => tool.name === "codemode")?.description;
@@ -1282,6 +1244,39 @@ describe("AgentSession MCP tools after resume and reload", () => {
 			expect(second.harness.session.getActiveToolNames().includes("mcp__docs__search")).toBe(kept);
 		},
 	);
+
+	// Like extensions that register a loader tool and hide it at session_start: the restore or reload
+	// activates the loader as a tool the branch never recorded, and the extension deactivates it again.
+	const dropLoader: ExtensionFactory = (pi) => {
+		pi.registerTool({
+			name: "loader",
+			label: "loader",
+			description: "Loads the extension's tools.",
+			parameters: Type.Object({}),
+			execute: async () => ({ content: [], details: undefined }),
+		});
+		pi.on("session_start", () => pi.setActiveTools(pi.getActiveTools().filter((name) => name !== "loader")));
+	};
+
+	it("keeps restored tools when an extension deactivates only its own tool before they register", async () => {
+		const first = await setup(undefined, [dropLoader]);
+		await loadDocsSearch(first.harness);
+		const second = await setup(first.harness.sessionManager, [dropLoader]);
+		await vi.waitFor(() =>
+			expect(second.harness.session.getAllTools().some((tool) => tool.name === "mcp__docs__search")).toBe(true),
+		);
+		expect(second.harness.session.getActiveToolNames()).toContain("mcp__docs__search");
+		expect(second.harness.session.getActiveToolNames()).not.toContain("loader");
+	});
+
+	it("keeps tools tool_search loaded after /reload when an extension deactivates only its own tool", async () => {
+		const { harness, connected } = await setup(undefined, [dropLoader]);
+		await loadDocsSearch(harness);
+		await harness.session.reload();
+		await vi.waitFor(() => expect(connected).toEqual(["docs", "docs"]));
+		await vi.waitFor(() => expect(harness.session.getActiveToolNames()).toContain("mcp__docs__search"));
+		expect(harness.session.getActiveToolNames()).not.toContain("loader");
+	});
 
 	it("does not activate restored tools that register after the next prompt starts", async () => {
 		const first = await setup();

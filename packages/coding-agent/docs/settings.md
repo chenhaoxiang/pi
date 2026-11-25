@@ -126,20 +126,14 @@ See [Themes](themes.md) and [Terminal Setup](terminal-setup.md) for format and p
 | `httpIdleTimeoutMs` | number \| `"disabled"` | `300000` | HTTP header and body idle timeout in milliseconds. Set to `0` or `"disabled"` to disable. |
 | `websocketConnectTimeoutMs` | number \| `"disabled"` | `15000` | WebSocket connection timeout in milliseconds. Set to `0` or `"disabled"` to disable. |
 | `retry.enabled` | boolean | `true` | Enable automatic agent-level retry for transient failures. |
-| `retry.maxRetries` | number | `600` | Maximum agent-level retry attempts, excluding the initial request. |
-| `retry.baseDelayMs` | number | `1000` | Base delay in milliseconds; scales the stepped retry schedule below. |
-| `retry.maxAgentDelayMs` | number | `100000` | Maximum agent-level retry delay in milliseconds. |
-| `retry.maxConsecutiveSameErrorRetries` | integer | `12` | Stop after this many consecutive equivalent transient errors (the first failed attempt counts); `0` disables the circuit breaker. |
-| `retry.provider.responseHeadersTimeoutMs` | number | `120000` | Codex pre-response deadline in milliseconds (SSE response headers or WebSocket first event). It does not cap model thinking after the transport is acknowledged; set to `0` to disable. |
+| `retry.maxRetries` | number | `3` | Maximum agent-level retry attempts. |
+| `retry.baseDelayMs` | number | `2000` | Initial exponential-backoff delay in milliseconds. |
+| `retry.maxAgentDelayMs` | number | `60000` | Maximum agent-level retry delay in milliseconds. |
 | `retry.provider.timeoutMs` | number | `httpIdleTimeoutMs` | Provider request timeout in milliseconds. |
 | `retry.provider.maxRetries` | number | `0` | Provider-level retry attempts. |
 | `retry.provider.maxRetryDelayMs` | number | `60000` | Maximum server-requested delay in milliseconds. Set to `0` to disable the limit. |
 
-With the default base delay, agent-level retry intervals are 1, 3, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 26, 30, 35, 40, 50, 60, 70, 80, 90, then 100 seconds. Subsequent retries stay at 100 seconds. Each interval is multiplied by `retry.baseDelayMs / 1000` and capped by `retry.maxAgentDelayMs`. Explicit settings override these defaults. The consecutive-error circuit breaker resets when the normalized error changes or a response succeeds; it prevents a large retry budget from spinning on the same outage. Success ends the retry sequence; cancellation and non-retryable errors retain their existing behavior.
-
 Keep `retry.provider.maxRetries` at `0` unless provider-level retries are required. Provider retries can delay Pi from handling quota and usage-limit errors itself.
-
-An explicitly accepted [native scheduled custom turn](sdk.md#native-scheduled-custom-turns) uses its own finite policy: at most three additional response retries, three equivalent failures including the initial response, and a default five-minute cumulative failed-call/retry-wait budget. Its soft/hard elapsed budgets are supplied by the scheduler, not inferred from interval/cron cadence. The policy ends with that exact run; provider retries are forced to zero only for its requests. It never rewrites the global settings above, including an explicitly disabled global equivalent-error circuit. Ordinary prompts and separately queued user turns retain their existing settings. No global scheduled-profile setting is introduced.
 
 ## Shell
 

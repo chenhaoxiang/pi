@@ -14,7 +14,6 @@ import { delimiter, join } from "node:path";
 import { ModelsError } from "@earendil-works/pi-ai";
 import lockfile from "proper-lockfile";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type * as Config from "../src/config.ts";
 import { ENV_AGENT_DIR, PACKAGE_NAME, VERSION } from "../src/config.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { DefaultPackageManager, type ResolvedPaths } from "../src/core/package-manager.ts";
@@ -25,14 +24,6 @@ import { ConfigSelectorComponent } from "../src/modes/interactive/components/con
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { handlePackageCommand } from "../src/package-manager-cli.ts";
 import { allowNetwork } from "./test-network-env.ts";
-
-// These existing installer tests characterize the community update channel.
-// Keep their assertions intact with a community-version fixture; the maintained
-// fork refusal is independently covered by fork-update-channel and CLI smoke.
-vi.mock("../src/config.ts", async (importOriginal) => {
-	const config = await importOriginal<typeof Config>();
-	return { ...config, VERSION: config.VERSION.replace(/-fork\.[1-9]\d*$/, "") };
-});
 
 describe("package commands", () => {
 	let tempDir: string;
@@ -54,6 +45,7 @@ describe("package commands", () => {
 	function prepareManagedInstall(
 		targetVersion: string,
 		npmExitCode = 0,
+		stagedPiUsesNode = false,
 	): { managedRoot: string; npmRecordPath: string } {
 		const managedRoot = join(agentDir, "install");
 		const activeRelease = join(managedRoot, "releases", VERSION);
@@ -84,7 +76,9 @@ fs.writeFileSync(
 	piPath,
 	process.platform === "win32"
 		? "@echo off\\r\\necho ${targetVersion}\\r\\n"
-		: "#!/bin/sh\\nprintf '%s\\n' ${targetVersion}\\n",
+		: ${stagedPiUsesNode}
+			? "#!/usr/bin/env node\\nconsole.log('${targetVersion}')\\n"
+			: "#!/bin/sh\\nprintf '%s\\n' ${targetVersion}\\n",
 );
 if (process.platform !== "win32") fs.chmodSync(piPath, 0o755);
 `,
@@ -831,6 +825,29 @@ if (process.platform !== "win32") fs.chmodSync(piPath, 0o755);
 		expect(errorSpy).not.toHaveBeenCalled();
 		expect(process.exitCode).toBeUndefined();
 	});
+
+	it.skipIf(process.platform === "win32")(
+		"verifies a managed update with the running Node when an older node is first on PATH",
+		async () => {
+			// https://github.com/earendil-works/pi/issues/12048
+			const targetVersion = getNewerPatchVersion();
+			const { managedRoot } = prepareManagedInstall(targetVersion, 0, true);
+			const oldNodeDir = join(tempDir, "old-node");
+			mkdirSync(oldNodeDir, { recursive: true });
+			const oldNodePath = join(oldNodeDir, "node");
+			writeFileSync(oldNodePath, "#!/bin/sh\necho 'unsupported old node' >&2\nexit 1\n");
+			chmodSync(oldNodePath, 0o755);
+			process.env.PATH = `${oldNodeDir}${delimiter}${process.env.PATH ?? ""}`;
+			mockManagedUpdate(targetVersion);
+			vi.spyOn(console, "log").mockImplementation(() => {});
+			const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			await expect(runPackageCommandDirectly(["update", "--self"])).resolves.toBeUndefined();
+
+			expect(errorSpy).not.toHaveBeenCalled();
+			expect(readFileSync(join(managedRoot, "current-version"), "utf8")).toBe(`${targetVersion}\n`);
+		},
+	);
 
 	it("rejects a concurrent managed update", async () => {
 		const targetVersion = getNewerPatchVersion();

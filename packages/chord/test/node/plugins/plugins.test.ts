@@ -4,6 +4,7 @@
 // over 200 reloads, and end to end a server and a worker loading plugin directories, an edit rolled out, a broken edit
 // kept old on both hosts.
 
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -54,13 +55,16 @@ const Item = local("test.item", { version: 1, params: {}, members: { label: str(
 
 /** A plugin `dir` named `@test/<dir>` serving `Item` labelled `label` from its worker facet. */
 async function itemPlugin(root: string, dir: string, label: string): Promise<void> {
-	await writePlugin(root, dir, `@test/${dir}`, {
-		"worker.ts": [
-			'import { constant, defineFacet, local, str } from "@earendil-works/chord";',
-			`const Item = local("test.${dir}", { version: 1, params: {}, members: { label: str() } });`,
-			`export default defineFacet((host) => host.serve(Item, () => ({ label: constant(${JSON.stringify(label)}) })));`,
-		].join("\n"),
-	});
+	await writePlugin(root, dir, `@test/${dir}`, { "worker.ts": itemSource(dir, label) });
+}
+
+/** The worker facet of `itemPlugin`'s plugin `dir`. */
+function itemSource(dir: string, label: string): string {
+	return [
+		'import { constant, defineFacet, local, str } from "@earendil-works/chord";',
+		`const Item = local("test.${dir}", { version: 1, params: {}, members: { label: str() } });`,
+		`export default defineFacet((host) => host.serve(Item, () => ({ label: constant(${JSON.stringify(label)}) })));`,
+	].join("\n");
 }
 
 /** The report of an in-process step's one host. */
@@ -185,6 +189,25 @@ describe("per plugin at reload", () => {
 		expect(report.plugins).toEqual({ added: ["@test/d"], changed: [], removed: ["@test/c"] });
 		expect(failedNames(report)).toEqual(["@test/e"]);
 		expect(await label("d")).toBe("d1");
+		await host.close(context);
+		plugins.close();
+	});
+
+	it("discovers again for a named plugin the watcher has not reported yet: removed, or new", async () => {
+		const { root, plugins, host } = await loaded();
+		// Built in the same tick as the change, before any file event can arrive: the watcher has marked nothing yet.
+		rmSync(join(root, "c"), { recursive: true });
+		const removed = await plugins.build(["@test/c"], context);
+		expect(removed.removed).toEqual(["@test/c"]);
+		expect(Object.keys(removed.plugins)).toEqual([]);
+		expect((await plugins.reload(host, removed, context)).plugins.removed).toEqual(["@test/c"]);
+		await settleFileEvents();
+		mkdirSync(join(root, "f"));
+		writeFileSync(join(root, "f", "package.json"), JSON.stringify({ name: "@test/f", type: "module" }));
+		writeFileSync(join(root, "f", "worker.ts"), itemSource("f", "f1"));
+		const added = await plugins.build(["@test/f"], context);
+		expect(Object.keys(added.plugins)).toEqual(["@test/f"]);
+		expect((await plugins.reload(host, added, context)).plugins.added).toEqual(["@test/f"]);
 		await host.close(context);
 		plugins.close();
 	});
@@ -391,41 +414,6 @@ describe("current sets (slice 10 D11)", () => {
 });
 
 describe("installs through the component", () => {
-	it("keeps plugin additions and removals pending across another plugin's dependency install", async () => {
-		const root = await tempRoot();
-		await itemPlugin(root, "a", "a1");
-		await itemPlugin(root, "c", "c1");
-		const tools = await tempRoot();
-		await writeFiles(tools, { "npm.mjs": "process.exit(0);" });
-		const plugins = createPlugins(
-			{
-				roots: [root],
-				kinds: kindsOf(HOST_PACKAGES),
-				install: { npmCommand: [process.execPath, join(tools, "npm.mjs")] },
-				onError: () => {},
-			},
-			context,
-		);
-		const host = createHost({ onError: () => {} });
-		await plugins.load(host, { kind: "worker", core: [], modules: HOST_PACKAGES }, context);
-		await itemPlugin(root, "b", "b1");
-		await rm(join(root, "c"), { recursive: true });
-		await vi.waitFor(() => expect(plugins.state.value.set).toBe(true));
-		await plugins.installDependencies("@test/a", context);
-		const built = await plugins.build(["@test/a"], context);
-		expect(built.removed).toEqual(["@test/c"]);
-		expect(built.facets.map(({ plugin }) => plugin).sort()).toEqual(["@test/a", "@test/b"]);
-		await plugins.reload(host, built, context);
-		expect(
-			plugins
-				.current("worker")
-				?.map(({ plugin }) => plugin.name)
-				.sort(),
-		).toEqual(["@test/a", "@test/b"]);
-		await host.close(context);
-		plugins.close();
-	});
-
 	it("clears the plugin's install mark and dirties it", async () => {
 		const root = await tempRoot();
 		await itemPlugin(root, "a", "a1");

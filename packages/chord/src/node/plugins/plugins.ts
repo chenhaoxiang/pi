@@ -5,6 +5,8 @@
 // plugin's loaded facet. `rollout` runs the app's steps in order (one result per host) and clears the marks of plugins
 // applied on every host of every step.
 
+import { access } from "node:fs/promises";
+import { join } from "node:path";
 import type { Context } from "../../context/index.ts";
 import type { Principal } from "../../data/index.ts";
 import type { Host, LoadReport, PluginFacet, ReloadReport } from "../../host/index.ts";
@@ -97,7 +99,8 @@ export interface Plugins {
 	readonly discovery: Discovery;
 	/**
 	 * Builds every facet of `names` (and of plugins discovered since the last build; discovery runs again first when
-	 * the plugin set changed): plain data. It changes no current set: a rollout ships it.
+	 * the plugin set changed, or when a named plugin is unknown to it or its files are gone before the watcher said
+	 * so): plain data. It changes no current set: a rollout ships it.
 	 */
 	build(names: readonly string[], context: Context): Promise<Built>;
 	/**
@@ -164,8 +167,6 @@ class PluginsComponent implements Plugins {
 	readonly #runtime: PluginRuntime;
 	#discovery: Discovery = { plugins: [], problems: [] };
 	#discovered = false;
-	/** Names handed to a build (or initial load), not a metadata-only install refresh. */
-	#buildKnownPlugins = new Map<string, Plugin>();
 	/** The latest build of every (plugin, kind) built so far, by `plugin\u0000kind`. */
 	readonly #built = new Map<string, BuiltFacet>();
 	/** The current set of each kind used so far, by plugin name. */
@@ -200,10 +201,10 @@ class PluginsComponent implements Plugins {
 	}
 
 	async build(names: readonly string[], context: Context): Promise<Built> {
-		const before = this.#buildKnownPlugins;
-		if (!this.#discovered || this.#watcher.needsDiscovery) await this.#discover(context);
+		const before = new Map(this.#discovery.plugins.map((plugin) => [plugin.name, plugin]));
+		if (!this.#discovered || this.#watcher.needsDiscovery || (await unseen(names, before)))
+			await this.#discover(context);
 		const now = this.#discovery.plugins;
-		this.#buildKnownPlugins = new Map(now.map((plugin) => [plugin.name, plugin]));
 		const removed = [...before.keys()].filter((name) => !now.some((plugin) => plugin.name === name));
 		// A plugin whose files moved (a single file became a directory, a facet file came or went) is built again too.
 		const wanted = now.filter((plugin) => {
@@ -311,7 +312,6 @@ class PluginsComponent implements Plugins {
 		const plugin = this.#discovery.plugins.find((each) => each.name === name);
 		if (plugin === undefined) throw new Error(`plugins.installDependencies: no plugin "${name}"`);
 		await installDependencies(plugin, context, this.#options.install);
-		if (this.#watcher.needsDiscovery) await this.#discover(context);
 		this.#watcher.installed(name);
 	}
 
@@ -336,8 +336,6 @@ class PluginsComponent implements Plugins {
 			{ kinds: Object.keys(this.#options.kinds) },
 			context,
 		);
-		if (!this.#discovered)
-			this.#buildKnownPlugins = new Map(this.#discovery.plugins.map((plugin) => [plugin.name, plugin]));
 		this.#discovered = true;
 		// A plugin no longer discovered loses its builds: a name added again is built anew, never served an old build.
 		for (const key of this.#built.keys()) {
@@ -385,6 +383,31 @@ class PluginsComponent implements Plugins {
 		return built;
 	}
 }
+
+/**
+ * Whether a named plugin changed in a way the watcher has not reported yet (its events lag behind the files, more on
+ * some platforms than others): discovery does not know it, or a file discovery found for it is gone. A build of named
+ * plugins never trusts the watcher's timing for them.
+ */
+async function unseen(names: readonly string[], known: ReadonlyMap<string, Plugin>): Promise<boolean> {
+	for (const name of names) {
+		const plugin = known.get(name);
+		if (plugin === undefined) return true;
+		const files = [
+			...Object.values(plugin.facets),
+			...(plugin.layout === "directory" ? [join(plugin.dir, "package.json")] : []),
+		];
+		for (const file of files) if (!(await exists(file))) return true;
+	}
+	return false;
+}
+
+/** Whether `path` exists. */
+const exists = (path: string): Promise<boolean> =>
+	access(path).then(
+		() => true,
+		() => false,
+	);
 
 /**
  * Applies `built` to `set`, `kind`'s current set: its removed plugins and those rebuilt without a facet of `kind` leave

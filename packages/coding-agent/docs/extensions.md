@@ -1256,16 +1256,6 @@ pi.on("tool_result", async (event, ctx) => {
 
 Control flow helpers. `ctx.isIdle()` is false while Pi is processing an agent run, automatic retry, auto-compaction retry, or queued continuation.
 
-### ctx.scheduledExecution (optional capability v1)
-
-New hosts expose the native scheduled custom-turn capability as `ctx.scheduledExecution`. Check `version === 1` before resilient admission; a missing capability is unsupported, not permission to fall back to `ctx.abort()`. The same object is available to SDK consumers through `session.scheduledExecution`; see [Native scheduled custom turns](sdk.md#native-scheduled-custom-turns) for its exact binding, policy, handle and checkpoint contract.
-
-`unattendedInputGuardVersion === 1` additionally guarantees that native preflight blocks unattended questions before extension tool hooks, including calls registered during the run or reached through nested execution. Negotiate the actual property before removing a legacy guard; missing support is not permission to assume safety. The guard does not declare third-party hooks or arbitrary writes read-only.
-
-`active?.checkpoint({ nextAction, waitingReason, artifacts, effects })` is a local metadata operation, including while draining. References/hashes and effect declarations remain unverified; actual completed result IDs come from the native session, not tool arguments. Draining still denies new direct/nested tools and arbitrary shell/codemode wrappers; a checkpoint never grants permission to bypass another tool guard.
-
-`active?.requestCancel()` only requests cancellation. Await that handle's `settled` promise outside the active tool/event before treating the owned execution as closed; awaiting it inside its own run would deadlock. Slow tools and explicitly owned child handles retain the slot. The existing `ctx.abort(): void` method remains unchanged and is not a cancellation acknowledgement.
-
 ### ctx.shutdown()
 
 Request a graceful shutdown of pi.
@@ -1913,7 +1903,7 @@ const result = await pi.exec("git", ["status"], { signal, timeout: 5000 });
 // result.stdout, result.stderr, result.code, result.killed, result.truncated
 ```
 
-Options: `signal` and `timeout` terminate the command, `cwd` sets the working directory, and `maxBuffer` limits stdout and stderr combined (default 256 MiB). When output exceeds `maxBuffer`, pi terminates the command and returns the output up to the limit with `truncated: true`, `killed: true`, and a nonzero `code`. `killed` is true whenever pi terminated the command: timeout, abort, or `maxBuffer`. A command that ignores SIGTERM gets SIGKILL after 5 seconds.
+Options: `signal` and `timeout` terminate the command, `cwd` sets the working directory, and `maxBuffer` limits stdout and stderr combined (default 256 MiB). When output exceeds `maxBuffer`, pi terminates the command and returns the output up to the limit with `truncated: true`, `killed: true`, and a nonzero `code`. `killed` is true whenever pi terminated the command: timeout, abort, or `maxBuffer`. A command that ignores SIGTERM gets SIGKILL after 5 seconds. A command terminated by a signal, by pi or otherwise, reports 128 + the signal number as `code`, like a shell: 143 for SIGTERM, 137 for SIGKILL.
 
 ### pi.getActiveTools() / pi.getAllTools() / pi.setActiveTools(names)
 
@@ -1999,7 +1989,7 @@ import { createProvider, openAICompletionsApi } from "@earendil-works/pi-ai/comp
 const provider = createProvider({
   id: "local-server",
   name: "Local Server",
-  baseUrl: "http://localhost:8080/v1",
+  baseUrl: "http://localhost:9931/v1",
   auth: {
     apiKey: {
       name: "Local server setup",
@@ -2043,11 +2033,11 @@ pi.registerProvider("my-proxy", {
 
 // Register a live llama.cpp catalog without persisting discovered models
 pi.registerProvider("llama.cpp", {
-  baseUrl: "http://localhost:8080/v1",
+  baseUrl: "http://localhost:9931/v1",
   apiKey: "local",
   api: "openai-completions",
   async refreshModels({ signal }) {
-    const response = await fetch("http://localhost:8080/v1/models", { signal });
+    const response = await fetch("http://localhost:9931/v1/models", { signal });
     const { data } = (await response.json()) as { data: Array<{ id: string }> };
     return data.map(({ id }) => ({
       id,

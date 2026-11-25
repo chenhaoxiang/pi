@@ -8,7 +8,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { ModelsError } from "@earendil-works/pi-ai";
 import { Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
 import chalk from "chalk";
@@ -42,12 +42,7 @@ import { spawnProcess, spawnProcessSync, waitForChildProcess } from "./utils/chi
 import { canonicalizePath, getCwdRelativePath } from "./utils/paths.ts";
 import { getPiUserAgent } from "./utils/pi-user-agent.ts";
 import { stripBom } from "./utils/text.ts";
-import {
-	formatVersionCheckError,
-	getLatestPiRelease,
-	isMaintainedForkVersion,
-	isNewerPackageVersion,
-} from "./utils/version-check.ts";
+import { formatVersionCheckError, getLatestPiRelease, isNewerPackageVersion } from "./utils/version-check.ts";
 import {
 	cleanupWindowsSelfUpdateQuarantine,
 	quarantineWindowsNativeDependencies,
@@ -113,6 +108,19 @@ async function runManagedNpmCi(stageDir: string): Promise<void> {
 	if (code !== 0) throw new Error(`npm ${args.join(" ")} exited with code ${code ?? "unknown"}`);
 }
 
+/**
+ * Environment for the managed release smoke test, with the Node.js running this update
+ * first on PATH. On Windows the managed launcher runs Pi on the installer's standalone
+ * Node without changing PATH, so the release's `node_modules/.bin` shim may otherwise
+ * run an older system Node that cannot load the new release.
+ */
+function getManagedReleaseVerifyEnv(): NodeJS.ProcessEnv {
+	const nodeDir = dirname(process.execPath);
+	const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+	const currentPath = process.env[pathKey] ?? "";
+	return { ...process.env, [pathKey]: [nodeDir, currentPath].filter(Boolean).join(delimiter) };
+}
+
 function verifyManagedRelease(releaseDir: string, expectedVersion: string): void {
 	const binPath = join(
 		releaseDir,
@@ -123,6 +131,7 @@ function verifyManagedRelease(releaseDir: string, expectedVersion: string): void
 	const result = spawnProcessSync(binPath, ["--version"], {
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
+		env: getManagedReleaseVerifyEnv(),
 	});
 	if (result.error || result.status !== 0) {
 		const reason = result.error?.message || result.stderr.trim() || `exit code ${result.status ?? "unknown"}`;
@@ -708,11 +717,6 @@ interface SelfUpdatePlan {
 }
 
 async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
-	if (isMaintainedForkVersion(VERSION)) {
-		throw new Error(
-			"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
-		);
-	}
 	let latestRelease: Awaited<ReturnType<typeof getLatestPiRelease>>;
 	try {
 		latestRelease = await getLatestPiRelease(VERSION, { retry: true });
@@ -1121,11 +1125,6 @@ export async function handlePackageCommand(
 
 			case "update": {
 				const target = options.updateTarget ?? { type: "self" };
-				if (updateTargetIncludesSelf(target) && isMaintainedForkVersion(VERSION)) {
-					throw new Error(
-						"Maintained Pi fork self-update is disabled. Install a verified release from this fork instead of the community pi.dev/npm channel.",
-					);
-				}
 				if (options.showExtensionsSkippedNote) {
 					console.log(
 						chalk.dim(`Extensions are skipped. Run ${APP_NAME} update --extensions to update extensions.`),
