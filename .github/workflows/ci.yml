@@ -46,7 +46,7 @@ jobs:
             https://github.com/earendil-works/pi/releases/download/v1.6.0/pi-1.6.0-source.tar.gz \
             --output tmp/ci-model-data/pi-source.tar.gz
           echo '14519e288e84e713629b220bb6ade6818e32d4ff23f205fd80a7cc49dedc413e  tmp/ci-model-data/pi-source.tar.gz' | sha256sum --check --strict
-          tar -xzf tmp/ci-model-data/pi-source.tar.gz --directory tmp/ci-model-data pi-1.5.2/packages/ai/src/providers/data
+          tar -xzf tmp/ci-model-data/pi-source.tar.gz --directory tmp/ci-model-data pi-1.6.0/packages/ai/src/providers/data
           mkdir -p packages/ai/src/providers/data
           cp -R tmp/ci-model-data/pi-1.6.0/packages/ai/src/providers/data/. packages/ai/src/providers/data/
           npm run build:offline
