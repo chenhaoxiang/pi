@@ -126,9 +126,10 @@ See [Themes](themes.md) and [Terminal Setup](terminal-setup.md) for format and p
 | `httpIdleTimeoutMs` | number \| `"disabled"` | `300000` | HTTP header and body idle timeout in milliseconds. Set to `0` or `"disabled"` to disable. |
 | `websocketConnectTimeoutMs` | number \| `"disabled"` | `15000` | WebSocket connection timeout in milliseconds. Set to `0` or `"disabled"` to disable. |
 | `retry.enabled` | boolean | `true` | Enable automatic agent-level retry for transient failures. |
-| `retry.maxRetries` | number | `3` | Maximum agent-level retry attempts. |
-| `retry.baseDelayMs` | number | `2000` | Initial exponential-backoff delay in milliseconds. |
-| `retry.maxAgentDelayMs` | number | `60000` | Maximum agent-level retry delay in milliseconds. |
+| `retry.maxRetries` | number | `600` | Maximum agent-level retry attempts. |
+| `retry.baseDelayMs` | number | `1000` | Initial stepped-backoff delay in milliseconds. |
+| `retry.maxAgentDelayMs` | number | `100000` | Maximum agent-level retry delay in milliseconds. |
+| `retry.maxConsecutiveSameErrorRetries` | integer | `12` | Circuit-breaker limit for consecutive equivalent transient errors; `0` disables the breaker. |
 | `retry.provider.timeoutMs` | number | `httpIdleTimeoutMs` | Provider request timeout in milliseconds. |
 | `retry.provider.maxRetries` | number | `0` | Provider-level retry attempts. |
 | `retry.provider.maxRetryDelayMs` | number | `60000` | Maximum server-requested delay in milliseconds. Set to `0` to disable the limit. |

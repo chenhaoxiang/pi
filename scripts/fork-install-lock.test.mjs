@@ -36,6 +36,18 @@ function fixture(version, repository) {
 	return directory;
 }
 
+test("real maintained coding-agent metadata points its install lock at fork releases", () => {
+	const packageJson = JSON.parse(readFileSync(join(root, "packages/coding-agent/package.json"), "utf8"));
+	assert.equal(packageJson.piConfig?.forkRepository, "chenhaoxiang/pi");
+	const lock = JSON.parse(readFileSync(join(root, "packages/coding-agent/install-lock/package-lock.json"), "utf8"));
+	const entries = Object.entries(lock.packages).filter(([path]) => /^node_modules\/@earendil-works\/(?:pi-[^/]+|chord)$/.test(path));
+	assert.ok(entries.length > 1);
+	for (const [path, entry] of entries) {
+		assert.equal(entry.version, "1.6.0-fork.1", path);
+		assert.ok(entry.resolved.startsWith("https://github.com/chenhaoxiang/pi/releases/download/v1.6.0-fork.1/"), path);
+	}
+});
+
 for (const [version, repository, host] of [
 	["1.0.4", undefined, "https://registry.npmjs.org/"],
 	["1.0.4-fork.1", "chenhaoxiang/pi", "https://github.com/chenhaoxiang/pi/releases/download/v1.0.4-fork.1/"],
