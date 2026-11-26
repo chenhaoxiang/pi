@@ -127,6 +127,9 @@ class MemoryState implements SyncStateStore {
 	async set(sessionId: string, state: SyncState, _context: Context): Promise<void> {
 		this.states.set(sessionId, state);
 	}
+	async delete(sessionId: string, _context: Context): Promise<void> {
+		this.states.delete(sessionId);
+	}
 }
 
 /** `store` with some methods replaced: the remote keeps private fields, so the rest stay bound to it. */
@@ -198,7 +201,7 @@ function device(name: string, remoteStore: FileSystemSyncRemote) {
 		async forget(sessionId = SESSION): Promise<void> {
 			const store = copies.get(sessionId);
 			copies.delete(sessionId);
-			await state.set(sessionId, { syncedHead: undefined }, context);
+			await state.delete(sessionId, context);
 			if (store !== undefined) {
 				stores.splice(stores.indexOf(store), 1);
 				await store.close(context);
@@ -427,39 +430,60 @@ describe("syncing a session between devices", () => {
 		expect(await reads(await replica.store())).toEqual(await reads(await laptop.store()));
 	});
 
-	it("passes the writer's epoch to the remote and reports a refused one as stale_epoch", async () => {
+	it("reports a remote that lost the session's history as remote_empty, and starts over from a full copy", async () => {
+		const laptop = device("laptop", await remote());
+		await laptop.commit(seedBatches().slice(0, 4));
+		await laptop.upload();
+		const synced = (await laptop.store()).lastSeq;
+		await laptop.commit(seedBatches().slice(4));
+		// The remote's copy was deleted while the bookmark still says `synced`.
+		const emptied = await remote();
+		const upload = () =>
+			laptop.store().then((source) =>
+				uploadSession({
+					sessionId: SESSION,
+					device: "laptop",
+					source,
+					store: emptied,
+					state: laptop.state,
+					context,
+				}),
+			);
+		expect(await upload()).toEqual({ type: "remote_empty", at: synced });
+		// The host forgets the bookmark: the next upload is the whole store, as an archive (the outbox was trimmed).
+		await laptop.state.delete(SESSION, context);
+		const source = await laptop.store();
+		expect(await upload()).toEqual({ type: "uploaded", head: source.lastSeq });
+		expect((await emptied.list(SESSION, context)).batches).toEqual([
+			{ ...slot(0, source.lastSeq, "laptop"), archive: true },
+		]);
+		const replica = device("replica", emptied);
+		await replica.pull();
+		expect(await reads(await replica.store())).toEqual(await reads(source));
+	});
+
+	it("reports a slot the remote refuses for good, keeping its bookmark and outbox", async () => {
 		const store = await remote();
 		const laptop = device("laptop", store);
-		await laptop.commit(seedBatches().slice(0, 2));
-		const shared = (await laptop.store()).lastSeq;
-		let current = 1;
-		const epochs: (number | undefined)[] = [];
-		// A remote that issues epochs (Radius): refuses an upload whose epoch is not the current one.
-		const issuing = overriding(store, {
-			putBatch: async (...args: Parameters<SessionSyncMaintenance["putBatch"]>) => {
-				const epoch = args[6]?.epoch;
-				epochs.push(epoch);
-				if (epoch !== current) return { type: "stale_epoch", epoch: current };
-				return store.putBatch(...args);
-			},
+		await laptop.commit(seedBatches().slice(0, 3));
+		const refusing = overriding(store, {
+			putBatch: async () => ({ type: "refused", reason: "next_id_regression" }),
 		});
 		const source = await laptop.store();
-		const upload = (epoch: number) =>
-			uploadSession({
+		expect(
+			await uploadSession({
 				sessionId: SESSION,
 				device: "laptop",
 				source,
-				store: issuing,
+				store: refusing,
 				state: laptop.state,
-				epoch,
 				context,
-			});
-		expect((await upload(1)).type).toBe("uploaded");
-		// The remote gave the session to another writer: this device's epoch is stale.
-		current = 2;
-		await laptop.commit([entry(100)]);
-		expect(await upload(1)).toEqual({ type: "stale_epoch", at: shared, epoch: 2 });
-		expect(epochs).toEqual([1, 1]);
+			}),
+		).toEqual({ type: "refused", reason: "next_id_regression" });
+		expect(await laptop.state.get(SESSION, context)).toBeUndefined();
+		expect(source.outbox!.floor).toBe(0);
+		// Nothing was written: the remote that accepts takes the same slot.
+		expect((await laptop.upload()).type).toBe("uploaded");
 	});
 
 	it("refuses to upload a copy that lost uploaded commits, and pulls them back", async () => {
@@ -851,8 +875,8 @@ describe("host pieces", () => {
 		expect(await state.get(SESSION, context)).toBeUndefined();
 		await state.set(SESSION, { syncedHead: 3, pulling: 7 }, context);
 		expect(await state.get(SESSION, context)).toEqual({ syncedHead: 3, pulling: 7 });
-		await state.set(SESSION, { syncedHead: undefined }, context);
-		expect(await state.get(SESSION, context)).toEqual({ syncedHead: undefined });
+		await state.set(SESSION, {}, context);
+		expect(await state.get(SESSION, context)).toEqual({});
 		await state.delete(SESSION, context);
 		expect(await state.get(SESSION, context)).toBeUndefined();
 	});

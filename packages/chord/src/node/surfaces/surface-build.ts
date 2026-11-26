@@ -10,7 +10,7 @@ import type { ScriptSet } from "../../surfaces/index.ts";
 import type { HttpResponse } from "../http/index.ts";
 import type { BaseInputs, Built, Plugins, RolloutStep } from "../plugins/index.ts";
 import { type BaseBundle, type BasePlatform, type BaseResolution, buildBase } from "./bundle.ts";
-import { publishTo, type SurfaceName } from "./current.ts";
+import type { SurfaceName } from "./current.ts";
 import { PublishedScripts } from "./published.ts";
 import { served } from "./served.ts";
 
@@ -73,8 +73,8 @@ export class SurfaceBuild<P extends Principal> {
 
 	/**
 	 * Builds the base bundle and publishes the kind's first set (its plugins' facets built on first use) to the scripts
-	 * object, once (after the server's load: the object must be served). Shared by every waiter, so no caller's abort
-	 * ends it (the server's close fails it). Never rejects: its outcome.
+	 * object, once (after the server's load: the object must be served; a push that fails is the next step's to send).
+	 * Shared by every waiter, so no caller's abort ends it (the server's close fails it). Never rejects: its outcome.
 	 */
 	async build(): Promise<SurfaceBuilt> {
 		return publicOutcome(await this.#ready());
@@ -104,7 +104,7 @@ export class SurfaceBuild<P extends Principal> {
 			kinds: [this.#options.kind],
 			reload: async (built: Built, context: Context) => {
 				const outcome = await awaitWithContext(this.#ready(), context);
-				if (outcome.kind === "failed") return { hosts: [{ host: name, error: outcome.error }] };
+				if (outcome.kind === "failed") return { hosts: [{ kind: "failed", host: name, error: outcome.error }] };
 				return outcome.published.step(name).reload(built, context);
 			},
 		};
@@ -123,11 +123,16 @@ export class SurfaceBuild<P extends Principal> {
 	async #run(context: Context): Promise<Outcome<P>> {
 		const { kind, entry, resolution, plugins } = this.#options;
 		try {
+			// The kind's plugins build here while the base builds in its own process; `start` below takes the same set
+			// (and its failure, if any).
+			plugins.scripts(kind, context).catch(() => {});
 			const base = await buildBase(entry, this.#platform, this.#prefix, resolution);
 			const published = new PublishedScripts(this.#surface, kind, this.#prefix, base.hash, plugins, this.#server);
 			await published.start(context);
 			this.#published = published;
-			await publishTo(this.#server, this.#surface, published.set, context);
+			// A push that fails (once, or as the scripts object's host closes) leaves the build standing: the next step's
+			// push sends the set again (round 2 of the perf pass, Astra).
+			await published.push(context).catch(() => {});
 			return { kind: "built", base, published };
 		} catch (error) {
 			return { kind: "failed", error };
