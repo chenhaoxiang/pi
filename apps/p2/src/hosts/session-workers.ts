@@ -22,12 +22,14 @@ import type { WorkerInit } from "../runtime/worker.ts";
 
 export type SessionWorkersOptions = {
 	readonly host: Host;
+	/** The server host's store: a worker's exit is published after the commits its calls queued there. */
+	readonly store: Store;
 	readonly plugins: Plugins;
 	readonly app: string;
 	readonly dataDir: string;
-	/** The server host's store: a worker's exit is published after the commits its calls queued there. */
-	readonly store: Store | undefined;
 	readonly fake: boolean;
+	/** Whether workers record and send telemetry (`WorkerInit.telemetry`; settings.json's `telemetry`). */
+	readonly telemetry: boolean;
 	readonly entry: string;
 	readonly execArgv: readonly string[];
 	readonly env?: Readonly<Record<string, string>>;
@@ -135,6 +137,7 @@ export class SessionWorkers implements SessionWorkerControl {
 						app: options.app,
 						dataDir: options.dataDir,
 						fake: options.fake,
+						telemetry: options.telemetry,
 						generation,
 						values,
 					};
