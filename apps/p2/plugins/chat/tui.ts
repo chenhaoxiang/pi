@@ -212,6 +212,20 @@ export class ChatSurface implements TuiSurface, ChatSurfaceApi {
 			scrollbarThumbStyle: (text) => runtime.theme.current.fg("scrollbarThumb", text),
 		});
 		this.transcript.attach(this.scroll);
+		// pi-tui repaints a scrolled viewport without re-rendering its component, so scrolling alone must run the
+		// viewport callbacks (top: older history; a gap: its page). Every scroll goes through these methods.
+		const notifyViewport = () => this.transcript.notifyViewport();
+		const scroll = this.scroll;
+		const override = (method: "scrollTo" | "scrollBy" | "scrollToStart" | "scrollToEnd"): void => {
+			const original = scroll[method].bind(scroll) as (...args: unknown[]) => unknown;
+			(scroll as unknown as Record<typeof method, (...args: unknown[]) => unknown>)[method] = (
+				...args: unknown[]
+			) => {
+				original(...args);
+				notifyViewport();
+			};
+		};
+		for (const method of ["scrollTo", "scrollBy", "scrollToStart", "scrollToEnd"] as const) override(method);
 		this.transcript.onTop = () => this.loadEarlier();
 		this.transcript.onVisibleGap = (item) => this.fillGap(item.gap);
 		this.transcript.onMissingAnchor = (anchor) => {
