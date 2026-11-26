@@ -338,6 +338,8 @@ export class TranscriptView implements Component {
 	private scroll: ScrollView | undefined;
 	/** Items of the last render with their first line, in order. */
 	private rendered: { key: string; start: number; entryId?: number }[] = [];
+	/** Lines of the last render, to know where the last item ends. */
+	private renderedLines = 0;
 	private pendingAnchor: TranscriptAnchor | undefined;
 	/** Called when the reader reached the top: load older history. */
 	onTop: (() => void) | undefined;
@@ -452,6 +454,7 @@ export class TranscriptView implements Component {
 		// One empty line between the transcript and the dock (DTUI).
 		lines.push("");
 		this.rendered = rendered;
+		this.renderedLines = lines.length;
 		if (scroll && kept) {
 			const start = starts.get(kept.key);
 			if (start !== undefined) {
@@ -473,16 +476,28 @@ export class TranscriptView implements Component {
 				}
 			}
 		}
-		// At the top of a laid-out viewport (or everything fits): older history may continue above.
-		if (scroll && scroll.viewportHeight > 0 && scroll.scrollTop === 0 && !this.pendingAnchor) this.onTop?.();
-		if (scroll && scroll.viewportHeight > 0 && !this.pendingAnchor)
-			order.forEach((view, index) => {
-				const start = rendered[index]!.start;
-				const end = rendered[index + 1]?.start ?? lines.length;
-				const visible = end > scroll.scrollTop && start < scroll.scrollTop + scroll.viewportHeight;
-				if (visible && view.item.type === "gap") this.onVisibleGap?.(view.item);
-			});
+		this.notifyViewport();
 		return lines;
+	}
+
+	/**
+	 * Runs the callbacks that depend on what the viewport shows: the top (older history) and any visible gap.
+	 *
+	 * pi-tui repaints a scrolled viewport from its cached component output, so `render()` does not run again when a
+	 * key only scrolls (ctrl+home, page up, the wheel). The chat surface therefore calls this after every scroll of
+	 * the primary view, and `render()` calls it for layout-driven changes.
+	 */
+	notifyViewport(): void {
+		const scroll = this.scroll;
+		if (!scroll || scroll.viewportHeight <= 0 || this.pendingAnchor) return;
+		if (scroll.scrollTop === 0) this.onTop?.();
+		const first = scroll.scrollTop;
+		const last = first + scroll.viewportHeight;
+		this.rendered.forEach((entry, index) => {
+			const end = this.rendered[index + 1]?.start ?? this.renderedLines;
+			const item = this.views.get(entry.key)?.item;
+			if (item?.type === "gap" && end > first && entry.start < last) this.onVisibleGap?.(item);
+		});
 	}
 
 	dispose(): void {
