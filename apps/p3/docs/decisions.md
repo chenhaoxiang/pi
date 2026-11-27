@@ -503,4 +503,3 @@ and its working rules are in `handoff.md`.
   agent with a shell on a machine can do whatever that machine's user can, the Pi's data and the command socket
   included: that is how it writes plugins. Confining an agent means no shell, or a location without the owner's files
   (a sandbox). Documented in `base.md`, "What admission confines".
-

@@ -14,10 +14,10 @@ owner: chx
 ## Source and versions
 
 - Fork: `chenhaoxiang/pi`; community: `earendil-works/pi`.
-- `main` is our reviewed maintenance/release branch. The `1.6.1-fork.1` source candidate integrates the complete community v1.6.1 dependency closure (AI, agent core, coding agent, MCP, Chord, Durable, TUI and env) at commit `de8af7f01166e59e4e0a4507e3cee292e34b3d1a`, while retaining fork retry, transport, security, scheduling and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
+- `main` is our reviewed maintenance/release branch. The `1.7.0-fork.1` source candidate integrates the complete community v1.7.0 dependency closure (AI, agent core, coding agent, MCP, Chord, Durable, TUI, env and the two apps) from exact tag `v1.7.0` (`fb0fe823539f6d04850f6e34748c01f01f212e1f`), while retaining fork retry, transport, security, scheduling and update-channel safeguards. Later community-main commits are not included. Prior fork releases remain immutable rollback history.
 - `upstream-main` is a pure community mirror. The initial fork's 40 post-release community commits were preserved on this mirror, not included in the first maintenance baseline. Update it only by fast-forward; preserve divergence instead of force-pushing.
 - Configure `upstream` as read-only, with push URL `DISABLED`. Community synchronization and fork release changes require isolated branches, tests, independent review and normal PR merges.
-- The 11 public workspace packages share `1.6.1-fork.1`. This source candidate retains the run-scoped scheduled execution and compaction host contracts; release publication, installed payloads and loaded sessions remain separate evidence. The existing `1.6.0-fork.2`, `1.6.0-fork.1` and `1.5.2-fork.3` installations and their immutable release assets must remain available. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
+- The 11 public workspace packages share `1.7.0-fork.1`. This source candidate retains the run-scoped scheduled execution and compaction host contracts; release publication, installed payloads and loaded sessions remain separate evidence. The existing `1.6.1-fork.1`, `1.6.0-fork.2`, `1.6.0-fork.1` and `1.5.2-fork.3` installations and their immutable release assets must remain available. Future releases retain `<community-base>-fork.<positive revision>` naming and immutable v-prefixed tags.
 
 Platform protection for the maintenance and mirror refs is specified in [branch protection](fork-branch-protection.md). Its rollout does not publish or hot-reload a release.
 
@@ -67,6 +67,25 @@ This is a source/synthetic capability slice of the Schedule-owned `resilient-ser
 Fork CI uses the same credential-free `./test.sh` wrapper, including its two-worker bound; community CI retains direct `npm test`. This keeps every test and assertion while avoiding unbounded worker pressure on GC and child-process fixtures.
 
 Fork CI hydrates provider data (`npm run hydrate:model-data`) before `build:offline` and the existing checks/tests. The fork first pinned the immutable community `v1.6.1` source release asset, but the post-1.6.1 upstream main added models that are not in that snapshot; a frozen snapshot failed typecheck before any fork code ran. Live hydration restores the catalog the merged tests expect, at the cost of depending on models.dev availability during CI. Catalog updates remain explicit: review the resulting metadata when releasing, and do not edit generated prices or weaken assertions to make a live catalog pass. Hydration does not change runtime catalog refresh behavior or retroactively alter a published release.
+
+## 1.7.0 dependency-closure integration
+
+Community 1.7.0 adds the Radius image/decision API surface, `Usage.imageOutput` and
+`cost.imageOutput`, the Chord remote-contract `granted`/privacy rework (protocol 2), the
+env daemon's session-kill and registration work, and it rebuilt the p3 app. The
+`1.7.0-fork.1` candidate takes that whole tree — the fork's history after `v1.6.1` was a
+tree replacement, so the merge replays the fork's own delta file by file against the exact
+tag rather than a git merge — and restores every fork seam on top of it.
+
+Retained fork behavior: native scheduled execution v1 and its unattended-input guard, the
+600-attempt stepped retry schedule with the consecutive-equivalent-error circuit breaker,
+the Codex pre-response (response-headers) deadline, compaction stream-drop recovery, the
+explicit `undici/index.js` dispatcher, `SessionManager.flush()`, host-peer/install-lock
+checks, the fork's own release workflow and the pi.dev/self-update refusal. Community
+behavior that arrived in the same wave (Radius image models, image-usage accounting, Chord
+`granted` contracts and protocol 2, the env daemon's session kill, p3's rebuilt app) is kept
+as-is rather than reverted to the older fork shape; `apps/p2-mac` and its nightly workflow
+also return, because the fork now carries the whole community tree.
 
 ## 1.6.0 dependency-closure integration
 

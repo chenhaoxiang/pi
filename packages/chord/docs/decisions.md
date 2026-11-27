@@ -2508,10 +2508,21 @@ validation and copies the v2 kernel added around Delta.
   contributors. (c) A request waiting unbound (`not_served`, `waiting`) is reported once through `onError` after 5 s,
   naming what it waits for; it keeps waiting until its `readyTimeout` as before. (d) An invalid plugin name is a
   programming error: `load` and `reload` throw instead of listing it in the report's `failed`. (e) (owner, 2026-11-03:
-  "add report"; p2 port footgun 10) Work a seal cancels before it ran (a document change or transaction waiting on its
-  object's line, started with a root's, handler's or attempt's context that ended first) is also reported through
-  `onError`, naming the object and the scope, besides rejecting: an empty `catch` cannot hide a change that never
-  happened. The rule itself stays: what is started with a context ends with it; await it.
+  "add report"; p2 port footgun 10; **changed by ERNDL-1190, owner, 2026-11-27: the narrow rule**) Work a seal
+  cancels before it ran (a document change or transaction waiting on its object's line, or whose `fn` settled before
+  it committed) is also reported through `onError`, naming the object and the scope, besides rejecting, when the
+  context it was started with ended first because of someone else: a root's context that settled, a handler's context
+  its caller cancelled (a caller object's end or reload included: it is a caller's cancel for the callee). An empty
+  `catch` cannot hide a change that never happened. **Not reported:** a transaction its own object's end cancelled:
+  the context's abort came, followed back through Chord's linked signals, from a signal its attempt aborted to end its
+  own work (any end of the attempt: the object ending, failing, a re-admission's denial, a reload replacing it or
+  stopping its routines; a job run the seal cut off), and the failure is that cancellation (refused or cut at the seal,
+  or the abort's reason), not an exception of the transaction's own, which still reports. What this gives up: a
+  fire-and-forget `void self.tx(…, ctx)` in `onLive` whose change is lost because the object is released or reloaded
+  right after is now silent (the object's end loses it as a crash would; its successor starts from what was
+  committed). The rule itself stays: what is started with a context ends with it; await it. Not taken: the broad
+  alternative, no object's end is a mistake whoever's (a caller object's end silent on the callee too; a tag on end
+  reasons instead of the token's signals).
 - **No limit on calls in progress per link; references in a method act as the caller (owner, 2026-11-03: "i guess
   it's fine without, guess we document it"; p2 port footguns 7, 11):** v1's `maxCalls` per link has no counterpart and
   gets none (the call window N bounds calls per origin; part limits bound sizes); documented. `ctx.get` in a method
@@ -3791,6 +3802,43 @@ From `research/chord-on-durable-objects.md`, adopted for the Chord v2 kernel bec
   column past that left out; (2) no test switch for the old path: the differential check is the oracle (every read
   equal to a fresh run after every commit) with a mutation check.
 
+- **Identical live reads share one source (owner, 2026-11-26: "fix the mechanism, never work around it in plugins";
+  ERNDL-1176; bench `test/bench/identical-reads.ts`; review rounds 1 and 2 by Opus, Astra and Fable):** the problem: 100
+  callers each with their own object reading the same named query, arguments and window made 100 `OpenQuery`s and
+  `Read`s, and every write ran, decoded and diffed it 100 times (notes 8 ms, a 500-item checklist 45 ms per write),
+  against 1.5 ms for one shared object. The rule: readers of the same provider instance's named query (its `OwnQuery`,
+  which goes with the provider's attempt and keeps its `SharedReads`) with the same arguments (their canonical JSON,
+  made once per read) and shape (`rows <first>` or `count`; the key text is made per read) share one live read
+  (`store/shared-read.ts`), reference-counted by its subscribers: one `OpenQuery`, one `Read` in the index and commit
+  index, one run, one decode and one value per write. The first reader makes it and starts its first run; a later
+  one takes its current value at once (and waits for nothing once there is one); the last one to leave closes it, and
+  a run adopted after that is decoded for nobody. What a shared read keeps (round 1): nothing of the reader that made
+  it (a site of the store and batch and a context of the adapter's metrics, one per `SharedReads`), not its first
+  run's stored rows (subscribers await one promise that carries nothing, settled by the first outcome or the first
+  run's end, whichever comes first), and each load has its own signal: an overtaken load (a rebind's next one started)
+  and a closed read's load (its last reader left, its provider retired) are aborted, so a late failure of theirs is no
+  failure of the store (round 2). Framed sources handed the same two values in one commit diff them once
+  (`Batch.diffs`, by the earlier value, emptied with the commit: a cache kept past it chained every later value to
+  an earlier one somebody held). Arguments are keys (round 1, Astra): **a query's argument schema is JSON only**
+  (a `bytes()` leaf is refused at declaration, for a contract's and a private query's, as for admissions and
+  events), and a value that is not strict JSON as `isJsonValue` (`json.ts`) has it (bytes, a function, `undefined`,
+  a number that is not finite, an object of a class, an array with more properties than its items, an accessor, a
+  symbol key, a cycle; a dictionary without a prototype is JSON) is refused `invalid/args` in the walk that makes
+  the key, also past a schema that checks nothing (rounds 2 and 3, Astra);
+  builders read arguments as canonical JSON does (key order immaterial, an order that matters is an array; `-0` is
+  `0`). Arguments that change move a reader between reads; a provider's retirement closes the
+  read for all its readers, which move to one read of the successor; a shared run is counted once (in the commit's
+  context). The owner's own window (`self.query`) is not shared. Lists come next (their pages shared while their
+  bookmarks are equal).
+
+- **The commit index files only the keys that come or go (owner, 2026-11-26; ERNDL-1176 step 4 and its review by Opus,
+  Astra and Fable):** a read's run is filed by walking only its key sets that changed (a set kept again, the same
+  object, is not walked). Under a key several reads keep, they are candidates in the order they came to keep it (the
+  filed set's own order): a read run again keeps its place, where the old filing moved it behind the others at each
+  run (two reads of 500 keys: 6,000 set changes per commit, now 0). Nothing observes the order otherwise (the oracle,
+  the list fuzz and the p3 suite pass); the one test pinning the old order states the new one. A per-filing stamp
+  that kept the old order was built and taken out: it sorted the reads of a shared key at every keyed change.
+
 - **A stall leaves no holder live and old (owner, 2026-11-24, decisions of that day item 5; spec `slice-15.md` §4,
   §8, built 2026-11-25):** reproduced across processes: a stalled host keeps its links (its late tick is no silence);
   its peers find it silent past `close` and close theirs, and their holders wait `loading` until a new link; none is
@@ -3829,6 +3877,62 @@ From `research/chord-on-durable-objects.md`, adopted for the Chord v2 kernel bec
   `self.writable` set to the same array after `push`) is read as "nothing changed": no rebuild, no update, holders keep the
   old value, and nothing reports it. Make a new object for every new value. No freezing, no development mode checks
   it (R9): the guides say it (`plugin-authoring.md` "Values you hand to Chord", p3's `chord-practices.md`).
+
+- **A follow re-attaches over a changing source (ERNDL-1191; the failure rule: main session, 2026-11-27, decision 131, reversible, for Mario to confirm):** the problem: an
+  object following a view of a runtime that a registry gives (p3's transcript over the session's harness) could only
+  fail and `retryOn` when a reload replaced the entry, which reported `object_failed` per open holder at every reload;
+  p3 rebuilt the follow in a plugin (`followAcross`), and its reviews found six races there (an attachment overtaken
+  while it attaches publishing, its rejection failing the follow, early calls lost or applied on the wrong view, a
+  withdrawn runtime kept, an observer left after its last reader). The rule: `self.follow(over, attach)`, `over` a
+  registry value or a writable (Chord's native sources, compared by identity; a JSON watchable is carry-over),
+  `attach(value, observer, ctx)` for each value that is not `undefined`. Each attachment has its own observer; only
+  the current one's calls and end count, and its end only while `over` still has its value. Activation waits for a
+  value under its deadline and attaches to the newest (one overtaken is dropped, its rejection too); a rejection of
+  the current one fails it `transient` as before. Live, a new value drops the current attachment at once and attaches
+  outside the batch; the new one's calls are held, then given as one `[["r", newest]]`; one overtaken never
+  publishes; `undefined` lets the attachment go and keeps the last value. **A failure of the source still given while
+  live (its attach rejecting or giving `undefined`, its runtime's `failed` end) fails the member, not the object**:
+  one failure call, `follow_failed` once per episode, retried after `nextDelay`'s backoff and at once on the next
+  value, the next attachment replacing the value whole. Its `ended` end lets the attachment go. While the attempt
+  still activates (also after this follow's first attachment, another one not yet), a failure is the activation's
+  (R4); a sealed attempt starts, reports and retries nothing more. Activation takes the first attachment current when
+  it resolves: each new value starts its own, one overtaken never holds up the newest. A call of the current
+  attachment in the batch that changed `over` counts only while `over` still gives its value: the follow is a
+  dependent of `over`, marked in the batch, and reconciles with `over`'s value after it (not with its frame: A, B, A
+  in one batch delivers none, and a registry failing without a last good value none either). A registry's last good
+  value counts while it is failed; with none it gives nothing to follow, as `undefined`. The same value again while
+  attached changes nothing, and while its retry waits it waits for the retry. A pending attachment keeps only its
+  newest state, folded: a value, or a failure with the last value before it (round 2, Astra). Round 3 (Astra, Opus):
+  an attachment settling in the turn its source changed is checked against `over`'s value as its calls are (a stale
+  success is detached, a stale rejection dropped); the old observation is detached before the next one attaches (a
+  runtime may hold one at a time); a value whose runtime ended its observation stays ended until another value; a
+  registry read while no provider serves it counts as read, so a provider served again marks its dependents
+  (`registries/record.ts`). A `failed` call while the object activates (also a plain follow's, also after this
+  follow's first attachment) fails the activation `transient`, never a member failed from the start, which a derive
+  over it would break. The first wait for a usable value fails at the deadline as any activation, its error naming
+  what it waited for ("waiting for a value of registry …"). Round 4 (Astra, Fable): before a plain follow's
+  attachment settles its calls are folded and the last decides, as in the over form (a failure followed by a value
+  activates; a failure last fails the activation); an attachment's detach that ends its attempt starts no successor;
+  an idle value (ended, or failed and waiting for its retry) follows `over`'s committed values, so a withdrawal and the
+  same value in the next batch wakes it (A, B, A inside one batch still does not); a registry provider coming, going
+  or changing its version marks every reader of every version, read since or not (`registries/record.ts`); whether
+  the attempt is live is a flag the attempt sets on its follows (`FollowSource.live()`). Round 5 (Astra): a follow
+  over a changing source decides its first attachment's failure where the runtime's attachment settles (a held failure
+  then, or a failed call after it while the object activates, fails the activation), not where the followed source
+  adopts it; before a plain attachment settles only its last call is kept; a failed first attachment is discarded
+  before its cleanup runs; an idle value reads `over`'s committed value at the end of each batch that changed it
+  (also none: a registry failing without a last good value), not its frames. Round 6 (Astra): a first attachment
+  failed at its settlement is over for good before its runtime's cleanup runs (no longer a dependent of `over`, so a
+  cleanup that changes it starts nothing), and that cleanup runs inside the activation; a runtime's detach that throws
+  is reported (`follow_failed`), never thrown out of a microtask; the idle read is listed on the batch of `over`'s own
+  host (`NativeSource.flushing`: a registry value of another host commits there). Round 7 (Astra): every detach
+  of the over form goes through that cleanup, also a superseded attachment's that settles late and the current one's
+  at the attempt's end. The runtime's `detach` runs outside any batch. Attachments are counted
+  (`chord.follow.attaches`, by reason `value` or `retry`). (Review rounds 1 to 7: Opus, Astra, Fable.)
+  **Built as an attach of its own** (`host/follow-over.ts`; main session, 2026-11-27, decision 140, reversible, from
+  Fable's review): to `FollowSource` the form over a changing source is one attachment, so a plain follow pays nothing for
+  it; its one new rule: a `failed` call fails the member until the next value, which replaces it whole (Durable
+  never sends one: it ends its observer). `self.follow(attach)` keeps R4 otherwise.
 
 ## Still valid from `target-design.md`
 
