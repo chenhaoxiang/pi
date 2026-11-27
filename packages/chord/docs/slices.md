@@ -131,6 +131,11 @@ slice spec's section citations are for orientation, not a reading limit (owner, 
   difference (`store/read-index.ts`). What a host retains after work came and went: `test/host/retained.test.ts`
   (every cache evicts; no growth round after round). Benches `test/bench/hot-paths.ts`, `list-heap.ts`,
   `hold-heap.ts` (client heap, case 8), `commit-index.ts` (case 3).
+- **A follow over a changing source** (built 2026-11-27, no slice of its own; decision "A follow re-attaches over a
+  changing source", ERNDL-1191): `self.follow(over, attach)` in `host/follow-over.ts`, an attach for
+  `host/follow.ts` (each attachment its own observer; a failed member retried with backoff; `follow_failed`;
+  `chord.follow.attaches`), the `over` check (`followedOver`, also in staging); tests in `test/host/follow.test.ts`
+  (the describes "over a changing source: …"); example 79.
 - **Chord's shared code** (upstream pi): `src/watch.ts` (`Watch`, `NativeWatch`, `WatchHandle`, `WatchEnd`,
   `NativeWatchable`), Delta (`track`, `diffRevisions`, `applyImmutable`, encoders, `PendingOps`, `appendText`),
   context, JSON, output, SQLite drivers.
@@ -373,6 +378,15 @@ deleted (the slice's spec and code are the record). Moved here from `carry-over.
   "retire a provider side's record only once its event tickets drained"). Whether an ended attempt should cut what it
   reaches (its object, its links' records) is undecided. (Events build reviews.)
 
+### Later: follows (when a case needs it)
+
+- **`self.follow(over, attach)` over a JSON watchable** (a reference's member, a document, a derive): only registry
+  values and writables are taken, compared by identity; a JSON source changes by ops, so a new value is no new
+  runtime to attach to without a comparison the case decides. (ERNDL-1191.)
+- **A held attachment's retirement folds into its replacement:** calls a new attachment made before it resolved are
+  given as one `[["r", newest]]` with `retired` false; a retirement among them is not carried on. Durable's views
+  over a changing source (the conversation) do not retire. (ERNDL-1191.)
+
 ### Workers: what the exit order left (decision "A worker's exit is published after its link's work ended")
 
 - **A call an exited worker made that the server relayed** to another host is cancelled there when the cancel
@@ -447,9 +461,14 @@ Left by the first part itself:
 - **Small leftovers of code review round 1:** `QueryPage` (contracts) and `Page` (store) are one shape with two
   names; a list decodes every loaded row's identity on each page adoption (0.6 ms a message at 20 pages); a list's
   method is `more` beside the values `more` and `moreAfter`, as the spec has it.
-- **Reads are not shared between readers** (§3.1's last bullet; test 3): two readers of one query with equal
-  arguments are two reads. The case that brings it back: many readers of identical arguments measured in a commit
-  step.
+- **A shared read holds its subscribers strongly** (`store/shared-read.ts`; ERNDL-1176, Opus's explainer check): a
+  reader leaves it only through its attempt's end (`detach`), its failure or another read; an object dropped without
+  its attempt ending would stay subscribed. Every way an object ends today detaches (tested: release, failure, reload,
+  a subscriber leaving while a frame is delivered). Weak subscriptions only if a case drops objects without ending them.
+- **A list's pages are not shared between lists** (decision "Identical live reads share one source"; ERNDL-1176):
+  live queries and counts share one read per (provider instance, query, arguments, shape); two lists of one query
+  with equal arguments are still two tilings. Next: share pages keyed by (query, arguments, bookmarks), every fresh
+  list's first page, pages behind a list's own `more` its own.
 - **A failed migration's held reads** keep their rows and stay held; §5 asks for `failed unavailable` ("table X is
   not ready") with the rows as last values. The case: a screen that must say why it is stale.
 - **Staging knows a recorded handle as a table, a named query of the object, or anything else.** A table given to
@@ -474,6 +493,11 @@ Left by the first part itself:
 
 ### After slice 11
 
+- **A tagged "building" state for the scripts object** (review of f86677f79, Opus, 2026-11-26): before its surface
+  built, the scripts object shows `ScriptSet` with `base: ""`, which clients skip (`surfaces/client.ts`). A tagged
+  value (`{ kind: "building" } | { kind: "built", set }`) would say it in the type instead of a sentinel. With it, decide
+  what a client that reconnected during the build shows when the first push then fails: today it keeps its old code
+  silently until the next step's push sends the set.
 - **Small examples** (owner, 2026-10-30: the 7c examples are complete but complex): once HTTP, workers, web and TUI
   exist, a pass of small, easy-to-read examples, each showing one thing a plugin author or app does.
 

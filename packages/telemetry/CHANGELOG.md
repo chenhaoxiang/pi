@@ -1,6 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [1.7.0-fork.1] - 2026-11-28
+
+### Changed
+
+- Integrated the community v1.7.0 dependency closure while retaining the fork's own contracts in this package.
+
+## [1.7.0] - 2026-11-27
 
 ## [1.6.1] - 2026-11-25
 
